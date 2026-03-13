@@ -1,0 +1,8 @@
+{
+  "name": "Radio Georgefctech",
+  "description": "Uma plataforma premium de rádio digital com som imersivo e interface de alta precisão.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ]
+}
