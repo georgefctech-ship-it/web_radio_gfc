@@ -45,7 +45,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const isHls = currentStation.url_resolved?.includes('.m3u8') || currentStation.hls === 1;
     if (isHls) {
       if (Hls.isSupported()) {
-        const hls = new Hls();
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 60,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 600,
+          appendErrorMaxRetry: 5,
+        });
         hls.loadSource(currentStation.url_resolved);
         hls.attachMedia(audio);
         hlsRef.current = hls;
@@ -162,6 +169,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       <audio 
         ref={audioRef} 
         crossOrigin="anonymous" 
+        preload="auto"
+        playsInline
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onError={(e) => {

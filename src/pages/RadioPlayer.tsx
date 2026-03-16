@@ -160,19 +160,24 @@ export default function RadioPlayer() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Global mouse up to stop volume dragging
+  // Global mouse/touch up to stop volume dragging
   useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
+    const handleMove = (clientY: number) => {
       if (isDraggingVolume && volumeBarRef.current) {
         const rect = volumeBarRef.current.getBoundingClientRect();
         const height = rect.height;
-        const y = e.clientY - rect.top;
+        const y = clientY - rect.top;
         const newVolume = Math.max(0, Math.min(1, 1 - (y / height)));
         setVolume(newVolume);
       }
     };
 
-    const handleGlobalMouseUp = () => {
+    const handleGlobalMouseMove = (e: MouseEvent) => handleMove(e.clientY);
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) handleMove(e.touches[0].clientY);
+    };
+
+    const handleGlobalEnd = () => {
       if (isDraggingVolume) {
         setIsDraggingVolume(false);
         setIsVolumeHovered(false);
@@ -181,12 +186,16 @@ export default function RadioPlayer() {
 
     if (isDraggingVolume) {
       window.addEventListener('mousemove', handleGlobalMouseMove);
-      window.addEventListener('mouseup', handleGlobalMouseUp);
+      window.addEventListener('mouseup', handleGlobalEnd);
+      window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+      window.addEventListener('touchend', handleGlobalEnd);
     }
 
     return () => {
       window.removeEventListener('mousemove', handleGlobalMouseMove);
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('mouseup', handleGlobalEnd);
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalEnd);
     };
   }, [isDraggingVolume]);
 
@@ -444,9 +453,16 @@ export default function RadioPlayer() {
     }
   }, [stations, setCurrentStation, setIsPlaying, isMuted, setIsMuted, volume, setVolume, handleNext, handlePrevious]);
 
-  const { isListening, toggleListening } = useVoiceControl({
+  const { isListening, toggleListening, error: voiceError } = useVoiceControl({
     onCommand: handleVoiceCommand
   });
+
+  useEffect(() => {
+    if (voiceError) {
+      setError(voiceError);
+      setTimeout(() => setError(null), 5000);
+    }
+  }, [voiceError]);
 
   // Handlers
   const handleSaveStation = async (e: FormEvent<HTMLFormElement>) => {
@@ -658,20 +674,21 @@ export default function RadioPlayer() {
                 <Navigation className={`size-5 ${isDriverMode ? 'animate-pulse' : ''}`} />
               </button>
 
-              <button 
-                onClick={toggleFullScreen}
-                className={`p-2 transition-colors ${isFullScreen ? 'text-white' : 'text-white/80 hover:text-white'} hidden sm:block`}
-              >
-                <Maximize2 className="size-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={toggleFullScreen}
+                  className={`p-2 transition-colors ${isFullScreen ? 'text-white' : 'text-white/80 hover:text-white'} hidden sm:block`}
+                >
+                  <Maximize2 className="size-5" />
+                </button>
+                <button className="p-2 text-white/80 hover:text-white lg:hidden" onClick={() => setIsSidebarOpen(false)}>
+                  <X className="size-6" />
+                </button>
+              </div>
             </div>
 
-            <div className="w-full flex items-center justify-between mb-6">
-              <button className="p-2 text-white/80 hover:text-white lg:hidden" onClick={() => setIsSidebarOpen(false)}>
-                <X className="size-6" />
-              </button>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-white text-center flex-1 drop-shadow-md">{branding.name}</h1>
-              <div className="w-10 lg:hidden" /> {/* Spacer for centering */}
+            <div className="w-full flex items-center justify-center mb-6">
+              <h1 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-white text-center drop-shadow-md">{branding.name}</h1>
             </div>
             
             {/* Avatar - Larger and more prominent as in screenshot */}
@@ -801,6 +818,15 @@ export default function RadioPlayer() {
                               const rect = volumeBarRef.current.getBoundingClientRect();
                               const height = rect.height;
                               const y = e.clientY - rect.top;
+                              setVolume(Math.max(0, Math.min(1, 1 - (y / height))));
+                            }
+                          }}
+                          onTouchStart={(e) => {
+                            setIsDraggingVolume(true);
+                            if (volumeBarRef.current && e.touches[0]) {
+                              const rect = volumeBarRef.current.getBoundingClientRect();
+                              const height = rect.height;
+                              const y = e.touches[0].clientY - rect.top;
                               setVolume(Math.max(0, Math.min(1, 1 - (y / height))));
                             }
                           }}

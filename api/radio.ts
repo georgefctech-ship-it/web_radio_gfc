@@ -24,43 +24,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const shuffledMirrors = [...verifiedMirrors].sort(() => Math.random() - 0.5);
   
-  const tryMirror = async (mirror: string, protocol: string) => {
+  const tryMirror = async (mirror: string, protocol: string, signal: AbortSignal) => {
     const url = `${protocol}://${mirror}/json/${pathPart}${query}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-    try {
-      const response = await fetch(url, { 
-        signal: controller.signal as any,
-        headers: { 
-          'User-Agent': 'RadioGeorgeFctech/1.0 (georgefctech@gmail.com)',
-          'Accept': 'application/json'
-        }
-      });
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`Status ${response.status}`);
+    const response = await fetch(url, { 
+      signal: signal as any,
+      headers: { 
+        'User-Agent': 'RadioGeorgeFctech/1.0 (georgefctech@gmail.com)',
+        'Accept': 'application/json'
       }
-      
-      return await response.json();
-    } catch (err) {
-      clearTimeout(timeoutId);
-      throw err;
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Status ${response.status}`);
     }
+    
+    return await response.json();
   };
 
-  for (const mirror of shuffledMirrors) {
+  // Try in batches of 3 mirrors (6 requests: 3 HTTPS, 3 HTTP)
+  const batchSize = 3;
+  for (let i = 0; i < shuffledMirrors.length; i += batchSize) {
+    const batch = shuffledMirrors.slice(i, i + batchSize);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s per batch
+
     try {
-      const data = await tryMirror(mirror, 'https');
-      return res.status(200).json(data);
+      const promises = batch.flatMap(m => [
+        tryMirror(m, 'https', controller.signal),
+        tryMirror(m, 'http', controller.signal)
+      ]);
+
+      const result = await Promise.any(promises);
+      clearTimeout(timeoutId);
+      controller.abort();
+      return res.status(200).json(result);
     } catch (err) {
-      try {
-        const data = await tryMirror(mirror, 'http');
-        return res.status(200).json(data);
-      } catch (err2) {
-        console.warn(`[Radio Proxy Vercel] Mirror Failed: ${mirror}`);
-      }
+      clearTimeout(timeoutId);
+      console.warn(`[Radio Proxy Vercel] Batch ${i/batchSize + 1} failed`);
     }
   }
 

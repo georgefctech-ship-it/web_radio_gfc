@@ -32,7 +32,7 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
     recog.onresult = (event: any) => {
       const last = event.results.length - 1;
       const text = event.results[last][0].transcript.toLowerCase().trim();
-      console.log('Voice Command Received:', text);
+      console.log('[VoiceControl] Received:', text);
 
       // Command logic
       const isEnglish = language.startsWith('en');
@@ -54,31 +54,35 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
         onCommand('volume_up');
       } else if (text.includes('volume baixo') || text.includes('abaixar volume') || text.includes('volume down') || text.includes('quieter')) {
         onCommand('volume_down');
-      } else if (text.includes('parar de ouvir') || text.includes('desligar microfone') || text.includes('stop listening') || text.includes('turn off microphone')) {
-        isListeningRef.current = false;
-        setIsListening(false);
-        recog.stop();
       } else if (text.includes('ajuda') || text.includes('comandos') || text.includes('help') || text.includes('commands')) {
         onCommand('help');
       }
     };
 
     recog.onstart = () => {
+      console.log('[VoiceControl] Started listening');
       setIsListening(true);
       isListeningRef.current = true;
+      setError(null);
     };
 
     recog.onerror = (event: any) => {
-      // Ignore 'no-speech' and 'aborted' errors as they are common and often transient
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        return;
+      console.error('[VoiceControl] Error:', event.error);
+      
+      if (event.error === 'no-speech') {
+        return; // Normal if user doesn't talk for a bit
       }
       
-      console.error('Speech Recognition Error:', event.error);
+      if (event.error === 'aborted') {
+        return; // Normal if stop() was called
+      }
+
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
         isListeningRef.current = false;
-        setError('Permission denied or service not allowed.');
+        setError('Permissão de microfone negada. Verifique as configurações do navegador.');
+      } else {
+        setError(`Erro no reconhecimento de voz: ${event.error}`);
       }
     };
 
