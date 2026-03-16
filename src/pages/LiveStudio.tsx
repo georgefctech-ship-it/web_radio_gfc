@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity } from 'lucide-react';
+import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
-import { useAudioMixer, Vignette } from '../hooks/useAudioMixer';
+import { useNavigate } from 'react-router-dom';
+import { useAudioMixer } from '../hooks/useAudioMixer';
 import { VUMeter } from '../components/VUMeter';
-
-const VIGNETTES: Vignette[] = [
-  { id: '1', name: 'Vinheta Abertura', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
-  { id: '2', name: 'Comercial 30s', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
-  { id: '3', name: 'Efeito Transição', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
-];
+import { vignetteService, type Vignette } from '../services/vignetteService';
+import { usePlayer } from '../context/PlayerContext';
+import { supabase } from '../lib/supabase';
 
 export const LiveStudio: React.FC = () => {
+  const navigate = useNavigate();
+  const { setIsDucked } = usePlayer();
   const {
     initialize,
     toggleMic,
@@ -29,8 +29,45 @@ export const LiveStudio: React.FC = () => {
   const [isOnAir, setIsOnAir] = useState(false);
   const [listeners, setListeners] = useState(0);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [vignettes, setVignettes] = useState<Vignette[]>([]);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [isVignetteFormOpen, setIsVignetteFormOpen] = useState(false);
+  const [editingVignette, setEditingVignette] = useState<Vignette | null>(null);
+  const [vignetteForm, setVignetteForm] = useState({ name: '', url: '' });
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
-  
+
+  // Check Admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/admin');
+        return;
+      }
+      setIsAdmin(true);
+      setLoading(false);
+    };
+    checkAdmin();
+  }, [navigate]);
+
+  // Ducking Logic
+  useEffect(() => {
+    setIsDucked(isMicActive);
+  }, [isMicActive, setIsDucked]);
+
+  // Load Vignettes
+  useEffect(() => {
+    const loadVignettes = async () => {
+      const data = await vignetteService.getAll();
+      setVignettes(data);
+    };
+    loadVignettes();
+  }, []);
+
+  // Socket and WebRTC Setup
   useEffect(() => {
     const newSocket = io();
     setSocket(newSocket);
@@ -103,10 +140,52 @@ export const LiveStudio: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  const handleSaveVignette = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingVignette) {
+      const updated = await vignetteService.update(editingVignette.id, vignetteForm);
+      if (updated) {
+        setVignettes(vignettes.map(v => v.id === updated.id ? updated : v));
+      }
+    } else {
+      const created = await vignetteService.create(vignetteForm);
+      if (created) {
+        setVignettes([...vignettes, created]);
+      }
+    }
+    setIsVignetteFormOpen(false);
+    setEditingVignette(null);
+    setVignetteForm({ name: '', url: '' });
+  };
+
+  const handleDeleteVignette = async (id: string) => {
+    if (confirm('Deseja excluir esta vinheta?')) {
+      const success = await vignetteService.delete(id);
+      if (success) {
+        setVignettes(vignettes.filter(v => v.id !== id));
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
       <header className="flex items-center justify-between mb-12">
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => navigate('/')}
+            className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 transition-colors mr-2"
+            title="Sair do Estúdio"
+          >
+            <LogOut className="size-5 text-gray-400" />
+          </button>
           <div className="size-12 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
             <Radio className="size-6 text-white" />
           </div>
@@ -200,22 +279,65 @@ export const LiveStudio: React.FC = () => {
 
           {/* Vignettes Section */}
           <section className="bg-white/5 rounded-[40px] border border-white/10 p-8">
-            <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-8">Quick Play (Vinhetas)</h2>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Quick Play (Vinhetas)</h2>
+              <button 
+                onClick={() => {
+                  setEditingVignette(null);
+                  setVignetteForm({ name: '', url: '' });
+                  setIsVignetteFormOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+              >
+                <Plus className="size-3" />
+                Adicionar
+              </button>
+            </div>
+            
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {VIGNETTES.map((v) => (
-                <button
-                  key={v.id}
-                  onClick={() => playVignette(v.url)}
-                  className="group relative h-24 bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/50 transition-all text-left overflow-hidden"
-                >
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary">{v.name}</span>
-                  <div className="flex items-center justify-between">
-                    <Play className="size-4 text-primary" />
-                    <div className="size-1 bg-primary/20 rounded-full" />
+              {vignettes.map((v) => (
+                <div key={v.id} className="group relative">
+                  <button
+                    onClick={() => playVignette(v.url)}
+                    className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/50 transition-all text-left overflow-hidden"
+                  >
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary">{v.name}</span>
+                    <div className="flex items-center justify-between">
+                      <Play className="size-4 text-primary" />
+                      <div className="size-1 bg-primary/20 rounded-full" />
+                    </div>
+                  </button>
+                  
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingVignette(v);
+                        setVignetteForm({ name: v.name, url: v.url });
+                        setIsVignetteFormOpen(true);
+                      }}
+                      className="p-1.5 bg-black/60 rounded-lg text-gray-400 hover:text-white"
+                    >
+                      <Edit2 className="size-3" />
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteVignette(v.id);
+                      }}
+                      className="p-1.5 bg-black/60 rounded-lg text-red-400 hover:text-red-300"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
                   </div>
-                  <div className="absolute bottom-0 left-0 h-1 bg-primary/20 w-0 group-active:w-full transition-all duration-[30s]" />
-                </button>
+                </div>
               ))}
+              
+              {vignettes.length === 0 && (
+                <div className="col-span-full py-12 text-center border-2 border-dashed border-white/5 rounded-[32px]">
+                  <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Nenhuma vinheta cadastrada</p>
+                </div>
+              )}
             </div>
           </section>
         </div>
@@ -246,11 +368,72 @@ export const LiveStudio: React.FC = () => {
               <h2 className="text-sm font-black uppercase tracking-widest text-primary">Dicas de Estúdio</h2>
             </div>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Mantenha o ganho do microfone entre 80% e 100% para melhor clareza. Use as vinhetas para transições suaves entre falas.
+              Mantenha o ganho do microfone entre 80% e 100% para melhor clareza. Use as vinhetas para transições suaves entre falas. O áudio da rádio baixa automaticamente quando o microfone é ativado.
             </p>
           </div>
         </aside>
       </main>
+
+      {/* Vignette Form Modal */}
+      <AnimatePresence>
+        {isVignetteFormOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setIsVignetteFormOpen(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-black uppercase tracking-tighter">
+                  {editingVignette ? 'Editar Vinheta' : 'Nova Vinheta'}
+                </h3>
+                <button onClick={() => setIsVignetteFormOpen(false)} className="p-2 text-gray-500 hover:text-white">
+                  <X className="size-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveVignette} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nome da Vinheta</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={vignetteForm.name}
+                    onChange={(e) => setVignetteForm({ ...vignetteForm, name: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+                    placeholder="Ex: Vinheta Abertura"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">URL do Áudio (MP3)</label>
+                  <input 
+                    type="url" 
+                    required
+                    value={vignetteForm.url}
+                    onChange={(e) => setVignetteForm({ ...vignetteForm, url: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+                    placeholder="https://exemplo.com/audio.mp3"
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
+                >
+                  Salvar Vinheta
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <style>{`
         .vertical-range {

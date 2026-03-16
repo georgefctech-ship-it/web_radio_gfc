@@ -8,11 +8,13 @@ interface PlayerContextType {
   isPlaying: boolean;
   volume: number;
   isMuted: boolean;
+  isDucked: boolean;
   audioLevel: number;
   setCurrentStation: (station: RadioStation) => void;
   setIsPlaying: (playing: boolean) => void;
   setVolume: (volume: number) => void;
   setIsMuted: (muted: boolean) => void;
+  setIsDucked: (ducked: boolean) => void;
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
@@ -23,6 +25,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
   const [isMuted, setIsMuted] = useState(false);
+  const [isDucked, setIsDucked] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -93,9 +96,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
+      audioRef.current.volume = (isMuted ? 0 : volume) * (isDucked ? 0.2 : 1.0);
     }
-  }, [volume, isMuted]);
+  }, [volume, isMuted, isDucked]);
 
   // VU Meter Logic
   useEffect(() => {
@@ -158,11 +161,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       isPlaying,
       volume,
       isMuted,
+      isDucked,
       audioLevel,
       setCurrentStation,
       setIsPlaying,
       setVolume,
       setIsMuted,
+      setIsDucked,
       audioRef
     }}>
       {children}
