@@ -28,10 +28,7 @@ export interface RadioStation {
 }
 
 const getBaseUrl = () => {
-  if (typeof window !== 'undefined') {
-    // Ensure we use the current origin to avoid protocol/host mismatches
-    return `${window.location.origin}/api/radio`;
-  }
+  // Using relative path is most reliable for same-origin requests in an iframe
   return '/api/radio';
 };
 
@@ -42,10 +39,12 @@ const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
 const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
   for (let i = 0; i < retries; i++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000); // Increased to 20s timeout per attempt
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // Increased to 25s timeout
     
     try {
-      console.log(`[RadioService] Fetching: ${url} (Attempt ${i + 1})`);
+      const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+      console.log(`[RadioService] Fetching: ${fullUrl} (Attempt ${i + 1})`);
+      
       const response = await fetch(url, { 
         signal: controller.signal,
         headers: {
@@ -60,7 +59,8 @@ const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<R
       const errorText = await response.text().catch(() => 'No error body');
       console.warn(`[RadioService] Fetch failed: ${response.status} ${response.statusText} - ${errorText}`);
       
-      if ((response.status === 503 || response.status === 504 || response.status === 429) && i < retries - 1) {
+      // Retry on common temporary errors
+      if ((response.status === 503 || response.status === 504 || response.status === 429 || response.status === 500) && i < retries - 1) {
         await new Promise(res => setTimeout(res, delay * (i + 1)));
         continue;
       }
@@ -71,6 +71,10 @@ const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<R
       const errorMessage = err.message || 'Unknown network error';
       
       console.error(`[RadioService] ${isTimeout ? 'Timeout' : 'Network error'} on attempt ${i + 1}:`, errorMessage);
+      
+      if (errorMessage === 'Failed to fetch') {
+        console.warn('[RadioService] "Failed to fetch" usually indicates a network connection issue, CORS block, or the server is down.');
+      }
       
       if (i === retries - 1) throw err;
       // Exponential backoff

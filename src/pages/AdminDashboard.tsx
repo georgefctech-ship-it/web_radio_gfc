@@ -19,9 +19,10 @@ import {
   X,
   Save,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Activity
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -292,6 +293,14 @@ export default function AdminDashboard() {
                 {item.label}
               </button>
             ))}
+            
+            <Link 
+              to="/studio" 
+              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold text-sm text-primary hover:bg-primary/10"
+            >
+              <Activity className="size-5" />
+              Estúdio ao Vivo
+            </Link>
           </nav>
         </div>
 
@@ -348,6 +357,29 @@ export default function AdminDashboard() {
         <div className="p-10 space-y-10">
           {activeMenu === 'dashboard' && (
             <>
+              {/* Quick Actions / Studio Access */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-primary/10 border border-primary/20 rounded-[40px] p-8 flex flex-col md:flex-row items-center justify-between gap-6"
+              >
+                <div className="flex items-center gap-6">
+                  <div className="size-20 bg-primary rounded-3xl flex items-center justify-center shadow-2xl shadow-primary/20">
+                    <Activity className="size-10 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">Estúdio ao Vivo</h2>
+                    <p className="text-gray-400 text-sm font-medium">Inicie sua transmissão agora e fale com seus ouvintes em tempo real.</p>
+                  </div>
+                </div>
+                <Link 
+                  to="/studio" 
+                  className="px-10 py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20"
+                >
+                  Entrar no Estúdio
+                </Link>
+              </motion.div>
+
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[

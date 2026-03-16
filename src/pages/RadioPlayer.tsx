@@ -40,7 +40,8 @@ import {
   Mic,
   MicOff,
   Navigation,
-  Activity
+  Activity,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -232,6 +233,11 @@ export default function RadioPlayer() {
   const playPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAdmin(!!session);
+    });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAdmin(!!session);
     });
@@ -410,12 +416,14 @@ export default function RadioPlayer() {
     });
 
     socket.on('webrtc:offer', async ({ fromId, offer }) => {
+      console.log(`[Player] Recebida oferta WebRTC de ${fromId}`);
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       });
       peerConnection.current = pc;
 
       pc.ontrack = (event) => {
+        console.log("[Player] Track recebida do estúdio:", event.streams[0].id);
         setLiveStream(event.streams[0]);
       };
 
@@ -459,14 +467,23 @@ export default function RadioPlayer() {
     }
   }, [isLive, liveStream]);
 
-  // Handle live audio playback
+  // Handle live audio playback with ducking
   useEffect(() => {
     if (liveStream && liveAudioRef.current) {
       liveAudioRef.current.srcObject = liveStream;
       liveAudioRef.current.play().catch(console.error);
-      setIsPlaying(false); // Pause regular radio
+      
+      // Duck radio volume when live is active
+      if (audioRef.current) {
+        audioRef.current.volume = volume * 0.2;
+      }
+    } else {
+      // Restore radio volume when live ends
+      if (audioRef.current) {
+        audioRef.current.volume = isMuted ? 0 : volume;
+      }
     }
-  }, [liveStream, setIsPlaying]);
+  }, [liveStream, volume, isMuted, audioRef]);
 
   const handleNext = useCallback(() => {
     if (!currentStation || stations.length === 0) return;
@@ -775,25 +792,25 @@ export default function RadioPlayer() {
               </div>
             )}
             
-            {/* Avatar - Larger and more prominent as in screenshot */}
-            <div className="size-20 sm:size-24 rounded-full border-4 border-white/20 overflow-hidden shadow-2xl hover:scale-110 transition-all duration-500 cursor-pointer bg-black/20 ring-4 ring-white/5 mb-6">
+            {/* Avatar - Radio Logo (Exclusive) */}
+            <div className="size-32 sm:size-40 rounded-3xl border-4 border-white/20 overflow-hidden shadow-2xl hover:scale-105 transition-all duration-500 cursor-pointer bg-black/20 ring-4 ring-white/5 mb-6">
               <img 
-                src={branding.logo} 
-                alt="Avatar" 
+                src={currentStation?.favicon || branding.logo} 
+                alt={currentStation?.name || 'Radio Logo'} 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://bcfckpzvbltnsryqbwif.supabase.co/storage/v1/object/public/meus_arquivos/logo-web-radio.png";
+                  (e.target as HTMLImageElement).src = branding.logo;
                 }}
               />
             </div>
 
-            {/* Now Playing Info integrated into header box */}
-            <div className="text-center space-y-3">
-              <p className="text-[10px] sm:text-[12px] font-black uppercase tracking-[0.5em] text-white/60 drop-shadow-sm">Tocando Agora</p>
+            {/* Now Playing Info - Cleaner version */}
+            <div className="text-center space-y-2">
               <h2 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tighter truncate w-full max-w-[220px] sm:max-w-[320px] drop-shadow-2xl">
-                {currentStation?.name || 'Selecione'}
+                {currentStation?.name || 'Selecione uma Rádio'}
               </h2>
+              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{currentStation?.tags?.split(',')[0] || 'Web Radio'}</p>
             </div>
           </div>
 
@@ -806,24 +823,6 @@ export default function RadioPlayer() {
               <Radio className="size-5" />
               <span className="text-[10px] font-black uppercase tracking-widest">Rádios</span>
             </button>
-            
-            {isAdmin ? (
-              <Link 
-                to="/studio" 
-                className="w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-primary bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-all"
-              >
-                <Activity className="size-5" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Estúdio ao Vivo</span>
-              </Link>
-            ) : (
-              <Link 
-                to="/admin" 
-                className="w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-white/60 bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
-              >
-                <Activity className="size-5" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Login Administrador</span>
-              </Link>
-            )}
           </nav>
 
           {/* Player Controls Section */}
@@ -1061,15 +1060,6 @@ export default function RadioPlayer() {
               <button className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">BIBLIOTECA</button>
               <Link to="/podcasts" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">PODCAST</Link>
               <Link to="/news" target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
-              {isAdmin && (
-                <Link 
-                  to="/studio" 
-                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
-                >
-                  <Activity className="size-3" />
-                  ESTÚDIO
-                </Link>
-              )}
             </nav>
 
             {/* Mobile Tab Switcher */}
@@ -1080,14 +1070,6 @@ export default function RadioPlayer() {
               >
                 RÁDIOS
               </button>
-              {isAdmin && (
-                <Link 
-                  to="/studio" 
-                  className="px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest text-primary"
-                >
-                  ESTÚDIO
-                </Link>
-              )}
             </div>
           </div>
 

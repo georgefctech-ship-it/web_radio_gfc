@@ -82,8 +82,13 @@ export const LiveStudio: React.FC = () => {
       if (!isOnAir) return;
       
       const stream = getMixedStream();
-      if (!stream) return;
+      if (!stream) {
+        console.warn("[Studio] Tentativa de stream sem mixer inicializado");
+        return;
+      }
 
+      console.log(`[Studio] Enviando stream para ouvinte ${listenerId}. Tracks:`, stream.getTracks().length);
+      
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
       });
@@ -181,8 +186,14 @@ export const LiveStudio: React.FC = () => {
   const handleGenerateAiVignette = async () => {
     if (!aiPrompt.trim()) return;
     setIsGeneratingVignette(true);
+    console.log("[Studio] Iniciando geração de vinheta com IA...");
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY não configurada no ambiente.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: aiPrompt }] }],
@@ -196,18 +207,39 @@ export const LiveStudio: React.FC = () => {
         },
       });
 
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      console.log("[Studio] Resposta da IA recebida:", response);
+
+      if (!response.candidates || response.candidates.length === 0) {
+        throw new Error("A IA não retornou nenhum candidato de resposta.");
+      }
+
+      const base64Audio = response.candidates[0].content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioUrl = `data:audio/mp3;base64,${base64Audio}`;
         const name = aiPrompt.length > 20 ? aiPrompt.substring(0, 20) + '...' : aiPrompt;
+        
+        console.log("[Studio] Tentando salvar vinheta no Supabase...");
         const created = await vignetteService.create({ name: `IA: ${name}`, url: audioUrl });
+        
         if (created) {
-          setVignettes([...vignettes, created]);
+          setVignettes(prev => [...prev, created]);
+          console.log("[Studio] Vinheta salva com sucesso!");
+        } else {
+          console.warn("[Studio] Falha ao salvar no banco, adicionando localmente para uso imediato.");
+          const localVignette: Vignette = {
+            id: `local-${Date.now()}`,
+            name: `IA: ${name} (Não salva)`,
+            url: audioUrl
+          };
+          setVignettes(prev => [...prev, localVignette]);
         }
+        setIsManageModalOpen(false);
+      } else {
+        throw new Error("Nenhum dado de áudio retornado pela IA.");
       }
-    } catch (err) {
-      console.error("Erro ao gerar vinheta com IA:", err);
-      alert("Falha ao gerar áudio com IA. Verifique sua conexão.");
+    } catch (err: any) {
+      console.error("[Studio] Erro ao gerar vinheta com IA:", err);
+      alert(`Erro: ${err.message || "Falha ao gerar áudio com IA."}`);
     } finally {
       setIsGeneratingVignette(false);
     }

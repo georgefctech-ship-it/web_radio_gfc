@@ -183,7 +183,7 @@ async function startServer() {
         const response = await fetch(url, { 
           signal: signal as any,
           headers: { 
-            'User-Agent': 'RadioGeorgeFctech/1.0 (georgefctech@gmail.com; https://ais-pre-bwlibpeeowv5lphaupukiq-293098167130.us-east1.run.app)',
+            'User-Agent': 'RadioGeorgeFctech/1.0 (georgefctech@gmail.com; https://ais-pre-inp6d22lv6tophe7edk6qh-293098167130.us-east1.run.app)',
             'Accept': 'application/json'
           }
         });
