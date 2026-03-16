@@ -231,6 +231,13 @@ export default function RadioPlayer() {
 
   const playPromiseRef = useRef<Promise<void> | null>(null);
 
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdmin(!!session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Initial Load
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -790,6 +797,35 @@ export default function RadioPlayer() {
             </div>
           </div>
 
+          {/* Navigation Menu in Sidebar */}
+          <nav className="relative z-10 mb-6 space-y-2">
+            <button 
+              onClick={() => setActiveTab('explore')}
+              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl transition-all ${activeTab === 'explore' ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+            >
+              <Radio className="size-5" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Rádios</span>
+            </button>
+            
+            {isAdmin && (
+              <Link 
+                to="/studio" 
+                className="w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-primary bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-all"
+              >
+                <Activity className="size-5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Estúdio ao Vivo</span>
+              </Link>
+            )}
+
+            <button 
+              onClick={() => setActiveTab('map')}
+              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl transition-all ${activeTab === 'map' ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+            >
+              <Compass className="size-5" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Mapa</span>
+            </button>
+          </nav>
+
           {/* Player Controls Section */}
           <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-4 sm:gap-8 min-h-0">
             {/* Voice Command Indicator */}
@@ -1003,7 +1039,7 @@ export default function RadioPlayer() {
               </div>
             )}
             
-            <nav className="hidden xl:flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-6">
               <button 
                 onClick={() => setActiveTab('explore')}
                 className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${activeTab === 'explore' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
@@ -1037,13 +1073,21 @@ export default function RadioPlayer() {
             </nav>
 
             {/* Mobile Tab Switcher */}
-            <div className="xl:hidden flex items-center bg-white/5 rounded-full p-1 border border-white/10">
+            <div className="md:hidden flex items-center bg-white/5 rounded-full p-1 border border-white/10">
               <button 
                 onClick={() => setActiveTab('explore')}
                 className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'explore' ? 'bg-primary text-white' : 'text-gray-500'}`}
               >
                 RÁDIOS
               </button>
+              {isAdmin && (
+                <Link 
+                  to="/studio" 
+                  className="px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest text-primary"
+                >
+                  ESTÚDIO
+                </Link>
+              )}
               <button 
                 onClick={() => setActiveTab('map')}
                 className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'map' ? 'bg-primary text-white' : 'text-gray-500'}`}
@@ -1087,6 +1131,18 @@ export default function RadioPlayer() {
             <button className="p-2 text-gray-500 hover:text-white transition-colors hidden sm:block">
               <Bell className="size-5" />
             </button>
+            <Link to="/admin" className="p-2 text-gray-500 hover:text-white transition-colors">
+              <User className="size-5" />
+            </Link>
+            {isAdmin && (
+              <button 
+                onClick={() => supabase.auth.signOut()}
+                className="p-2 text-red-500 hover:text-red-400 transition-colors"
+                title="Sair"
+              >
+                <X className="size-5" />
+              </button>
+            )}
           </div>
         </header>
 
