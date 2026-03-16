@@ -101,6 +101,8 @@ export default function RadioPlayer() {
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
   const liveAudioRef = useRef<HTMLAudioElement | null>(null);
   const peerConnection = useRef<RTCPeerConnection | null>(null);
@@ -243,6 +245,39 @@ export default function RadioPlayer() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Update progress bar
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const updateProgress = () => {
+      setCurrentTime(audio.currentTime);
+      // For radio streams, duration might be Infinity. 
+      // If it is, we'll show a simulated duration or just keep it at 0.
+      if (audio.duration && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      } else {
+        // Mock duration for radio feel if infinite
+        setDuration(0); 
+      }
+    };
+
+    audio.addEventListener('timeupdate', updateProgress);
+    audio.addEventListener('loadedmetadata', updateProgress);
+
+    return () => {
+      audio.removeEventListener('timeupdate', updateProgress);
+      audio.removeEventListener('loadedmetadata', updateProgress);
+    };
+  }, [audioRef]);
+
+  const formatTime = (time: number) => {
+    if (isNaN(time) || !isFinite(time)) return '00:00';
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Initial Load
   useEffect(() => {
@@ -781,8 +816,17 @@ export default function RadioPlayer() {
               </div>
             </div>
 
-            <div className="w-full flex items-center justify-center mb-6">
-              <h1 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-white text-center drop-shadow-md">{branding.name}</h1>
+            <div className="w-full flex flex-col items-center justify-center mb-6">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tighter uppercase text-white text-center drop-shadow-md mb-6">
+                {branding.name}
+              </h1>
+              
+              <div className="text-center space-y-1 mb-6">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/60">Tocando Agora</p>
+                <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tighter truncate w-full max-w-[220px] sm:max-w-[320px]">
+                  {currentStation?.name || 'Selecione uma Rádio'}
+                </h2>
+              </div>
             </div>
 
             {isLive && (
@@ -792,38 +836,32 @@ export default function RadioPlayer() {
               </div>
             )}
             
-            {/* Avatar - Radio Logo (Exclusive) */}
-            <div className="size-32 sm:size-40 rounded-3xl border-4 border-white/20 overflow-hidden shadow-2xl hover:scale-105 transition-all duration-500 cursor-pointer bg-black/20 ring-4 ring-white/5 mb-6">
+            {/* Big Station Logo - Hunter Style Centerpiece */}
+            <div className="w-full max-w-[320px] sm:max-w-[440px] aspect-square rounded-3xl border-4 border-white/20 overflow-hidden shadow-2xl bg-black/40 mb-2 group relative">
               <img 
-                src={currentStation?.favicon || branding.logo} 
+                src={currentStation?.favicon || `https://picsum.photos/seed/${currentStation?.name}/800`} 
                 alt={currentStation?.name || 'Radio Logo'} 
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = branding.logo;
                 }}
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60" />
             </div>
 
-            {/* Now Playing Info - Cleaner version */}
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl sm:text-4xl font-black text-white uppercase tracking-tighter truncate w-full max-w-[220px] sm:max-w-[320px] drop-shadow-2xl">
-                {currentStation?.name || 'Selecione uma Rádio'}
-              </h2>
-              <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">{currentStation?.tags?.split(',')[0] || 'Web Radio'}</p>
+            {/* Bottom Station Info */}
+            <div className="w-full px-4 mb-2">
+              <h3 className="text-lg font-black text-white uppercase tracking-tight truncate">
+                {currentStation?.name || 'Rádio'}
+              </h3>
+              <p className="text-xs font-bold text-white/40 uppercase tracking-widest">
+                {currentStation?.tags?.split(',')[0] || 'Web Radio'}
+              </p>
             </div>
           </div>
 
-          {/* Navigation Menu in Sidebar */}
-          <nav className="relative z-10 mb-6 space-y-2">
-            <button 
-              onClick={() => setActiveTab('explore')}
-              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl transition-all ${activeTab === 'explore' ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
-            >
-              <Radio className="size-5" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Rádios</span>
-            </button>
-          </nav>
+          {/* Navigation Menu removed as requested */}
 
           {/* Player Controls Section */}
           <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-4 sm:gap-8 min-h-0">
@@ -842,53 +880,22 @@ export default function RadioPlayer() {
               )}
             </AnimatePresence>
 
-            {/* Cover Art */}
-            <div className="w-full max-w-[240px] sm:max-w-none aspect-square rounded-[24px] sm:rounded-[40px] overflow-hidden shadow-2xl border-4 border-white/20 group relative bg-black/20">
-              {/* Blurred Background for "Complete" look */}
-              <img 
-                src={currentStation?.favicon || `https://picsum.photos/seed/${currentStation?.name}/800`}
-                className="absolute inset-0 w-full h-full object-cover blur-xl opacity-50 scale-110"
-                alt=""
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = `https://picsum.photos/seed/radio/800`;
-                }}
-              />
-              <motion.img 
-                src={currentStation?.favicon || `https://picsum.photos/seed/${currentStation?.name}/800`}
-                className="relative z-10 w-full h-full object-contain p-4 transition-transform duration-700 group-hover:scale-105"
-                alt=""
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = `https://picsum.photos/seed/radio/800`;
-                }}
-                animate={{ 
-                  scale: isPlaying ? 1 + (audioLevel * 0.12) : 1,
-                  rotate: isPlaying ? (audioLevel * 3) - 1.5 : 0
-                }}
-                transition={{ type: "spring", stiffness: 400, damping: 10, mass: 0.5 }}
-              />
-              <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors z-20" />
-            </div>
-
-            {/* Station Details */}
-            <div className="w-full space-y-1 text-left px-2 mt-2">
-              <h3 className="text-base sm:text-lg font-black text-white truncate drop-shadow-sm">{currentStation?.name?.toLowerCase()}</h3>
-              <p className="text-white/70 font-bold text-[10px] sm:text-xs uppercase tracking-widest">{currentStation?.tags?.split(',')[0]?.toUpperCase() || 'RADIO'}</p>
-            </div>
-
             {/* Progress Bar */}
             <div className="w-full space-y-3 px-2">
               <div className="h-1 bg-white/20 rounded-full overflow-hidden">
                 <motion.div 
                   className="h-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-                  animate={{ width: isPlaying ? '100%' : '0%' }}
-                  transition={{ duration: 60, ease: "linear" }}
+                  initial={{ width: '0%' }}
+                  animate={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : isPlaying ? '100%' : '0%' }}
+                  transition={{ 
+                    duration: duration > 0 ? 0.5 : isPlaying ? 60 : 0, 
+                    ease: duration > 0 ? "easeOut" : "linear" 
+                  }}
                 />
               </div>
               <div className="flex justify-between text-[9px] sm:text-[10px] font-black text-white/50 uppercase tracking-widest">
-                <span>00:00</span>
-                <span>00:00</span>
+                <span>{formatTime(currentTime)}</span>
+                <span>{duration > 0 ? formatTime(duration) : 'AO VIVO'}</span>
               </div>
             </div>
           </div>
@@ -1030,6 +1037,17 @@ export default function RadioPlayer() {
             <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-full">
               <Menu className="size-5" />
             </button>
+
+            {/* Branding Logo in Header - Always Visible */}
+            <div className="flex items-center gap-3">
+              <img 
+                src={branding.logo} 
+                alt="Logo" 
+                className="size-8 sm:size-10 rounded-xl object-cover border border-white/10"
+                referrerPolicy="no-referrer"
+              />
+              <h1 className="hidden sm:block text-sm font-black tracking-tighter uppercase text-white">{branding.name}</h1>
+            </div>
 
             {isLive && (
               <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full animate-pulse">
