@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut } from 'lucide-react';
+import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAudioMixer } from '../hooks/useAudioMixer';
 import { VUMeter } from '../components/VUMeter';
 import { vignetteService, type Vignette } from '../services/vignetteService';
 import { usePlayer } from '../context/PlayerContext';
 import { supabase } from '../lib/supabase';
+import { GoogleGenAI, Modality } from "@google/genai";
 
 export const LiveStudio: React.FC = () => {
   const navigate = useNavigate();
@@ -36,6 +37,8 @@ export const LiveStudio: React.FC = () => {
   const [vignetteForm, setVignetteForm] = useState({ name: '', url: '' });
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('Diga com voz empolgada: Rádio George F C Tech, a sua rádio na web!');
 
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
 
@@ -175,6 +178,41 @@ export const LiveStudio: React.FC = () => {
     }
   };
 
+  const handleGenerateAiVignette = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsGeneratingVignette(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: aiPrompt }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Fenrir' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audioUrl = `data:audio/mp3;base64,${base64Audio}`;
+        const name = aiPrompt.length > 20 ? aiPrompt.substring(0, 20) + '...' : aiPrompt;
+        const created = await vignetteService.create({ name: `IA: ${name}`, url: audioUrl });
+        if (created) {
+          setVignettes([...vignettes, created]);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao gerar vinheta com IA:", err);
+      alert("Falha ao gerar áudio com IA. Verifique sua conexão.");
+    } finally {
+      setIsGeneratingVignette(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
       <header className="flex items-center justify-between mb-12">
@@ -280,18 +318,30 @@ export const LiveStudio: React.FC = () => {
           {/* Vignettes Section */}
           <section className="bg-white/5 rounded-[40px] border border-white/10 p-8">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Quick Play (Vinhetas)</h2>
-              <button 
-                onClick={() => {
-                  setEditingVignette(null);
-                  setVignetteForm({ name: '', url: '' });
-                  setIsVignetteFormOpen(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
-              >
-                <Plus className="size-3" />
-                Adicionar
-              </button>
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Quick Play (Vinhetas)</h2>
+                <p className="text-[10px] text-gray-600 font-bold uppercase">Gerencie e toque seus áudios</p>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setIsManageModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/5 text-gray-400 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                >
+                  <Wand2 className="size-3" />
+                  Gerar com IA
+                </button>
+                <button 
+                  onClick={() => {
+                    setEditingVignette(null);
+                    setVignetteForm({ name: '', url: '' });
+                    setIsVignetteFormOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+                >
+                  <Plus className="size-3" />
+                  Adicionar
+                </button>
+              </div>
             </div>
             
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -369,11 +419,78 @@ export const LiveStudio: React.FC = () => {
             </div>
             <p className="text-xs text-gray-400 leading-relaxed">
               Mantenha o ganho do microfone entre 80% e 100% para melhor clareza. Use as vinhetas para transições suaves entre falas. O áudio da rádio baixa automaticamente quando o microfone é ativado.
+              <br /><br />
+              <strong className="text-primary">Dica Mobile:</strong> Use fones de ouvido para ouvir sua própria voz (monitoramento) sem causar eco.
             </p>
           </div>
         </aside>
       </main>
 
+      {/* AI Vignette Modal */}
+      <AnimatePresence>
+        {isManageModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setIsManageModalOpen(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <Wand2 className="size-6 text-primary" />
+                  <h3 className="text-xl font-black uppercase tracking-tighter">Gerar Vinheta com IA</h3>
+                </div>
+                <button onClick={() => setIsManageModalOpen(false)} className="p-2 text-gray-500 hover:text-white">
+                  <X className="size-6" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">O que a IA deve dizer?</label>
+                  <textarea 
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors min-h-[100px] resize-none"
+                    placeholder="Ex: Diga com voz de rádio: George Fctech, a melhor rádio!"
+                  />
+                </div>
+                
+                <button 
+                  onClick={handleGenerateAiVignette}
+                  disabled={isGeneratingVignette}
+                  className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                >
+                  {isGeneratingVignette ? (
+                    <>
+                      <Loader2 className="size-5 animate-spin" />
+                      Gerando Áudio...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="size-4 fill-current" />
+                      Gerar e Salvar
+                    </>
+                  )}
+                </button>
+                
+                <p className="text-[10px] text-gray-500 text-center font-bold uppercase tracking-widest">
+                  O áudio será gerado e adicionado automaticamente à sua lista.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
       {/* Vignette Form Modal */}
       <AnimatePresence>
         {isVignetteFormOpen && (

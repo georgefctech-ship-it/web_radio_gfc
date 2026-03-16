@@ -52,6 +52,11 @@ export const useAudioMixer = () => {
   const toggleMic = useCallback(async () => {
     if (!audioContextRef.current) await initialize();
     const ctx = audioContextRef.current!;
+    
+    // Ensure context is running (crucial for mobile)
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
 
     if (isMicActive) {
       micStreamRef.current?.getTracks().forEach(t => t.stop());

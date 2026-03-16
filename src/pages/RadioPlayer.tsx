@@ -807,7 +807,7 @@ export default function RadioPlayer() {
               <span className="text-[10px] font-black uppercase tracking-widest">Rádios</span>
             </button>
             
-            {isAdmin && (
+            {isAdmin ? (
               <Link 
                 to="/studio" 
                 className="w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-primary bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-all"
@@ -815,15 +815,15 @@ export default function RadioPlayer() {
                 <Activity className="size-5" />
                 <span className="text-[10px] font-black uppercase tracking-widest">Estúdio ao Vivo</span>
               </Link>
+            ) : (
+              <Link 
+                to="/admin" 
+                className="w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-white/60 bg-white/5 border border-white/10 hover:bg-white/10 transition-all"
+              >
+                <Activity className="size-5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Login Administrador</span>
+              </Link>
             )}
-
-            <button 
-              onClick={() => setActiveTab('map')}
-              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl transition-all ${activeTab === 'map' ? 'bg-white/20 text-white' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
-            >
-              <Compass className="size-5" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Mapa</span>
-            </button>
           </nav>
 
           {/* Player Controls Section */}
@@ -1088,12 +1088,6 @@ export default function RadioPlayer() {
                   ESTÚDIO
                 </Link>
               )}
-              <button 
-                onClick={() => setActiveTab('map')}
-                className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'map' ? 'bg-primary text-white' : 'text-gray-500'}`}
-              >
-                MAPA
-              </button>
             </div>
           </div>
 
