@@ -74,7 +74,6 @@ async function startServer() {
 
     // Live Streaming Logic
     socket.on("live:start", () => {
-      // In a real app, we'd verify admin status here
       isLive = true;
       liveBroadcasterId = socket.id;
       io.emit("live:status", { isLive, broadcasterId: liveBroadcasterId });
@@ -90,11 +89,23 @@ async function startServer() {
       }
     });
 
-    socket.on("live:audio", (audioChunk: ArrayBuffer) => {
-      if (socket.id === liveBroadcasterId) {
-        // Broadcast audio chunk to all OTHER clients
-        socket.broadcast.emit("live:audio", audioChunk);
+    // WebRTC Signaling Relay
+    socket.on("webrtc:request-stream", () => {
+      if (isLive && liveBroadcasterId) {
+        io.to(liveBroadcasterId).emit("webrtc:request-stream", { listenerId: socket.id });
       }
+    });
+
+    socket.on("webrtc:offer", ({ targetId, offer }) => {
+      io.to(targetId).emit("webrtc:offer", { fromId: socket.id, offer });
+    });
+
+    socket.on("webrtc:answer", ({ targetId, answer }) => {
+      io.to(targetId).emit("webrtc:answer", { fromId: socket.id, answer });
+    });
+
+    socket.on("webrtc:ice-candidate", ({ targetId, candidate }) => {
+      io.to(targetId).emit("webrtc:ice-candidate", { fromId: socket.id, candidate });
     });
 
     socket.on("disconnect", () => {

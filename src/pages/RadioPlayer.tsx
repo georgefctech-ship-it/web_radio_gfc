@@ -39,7 +39,8 @@ import {
   Users,
   Mic,
   MicOff,
-  Navigation
+  Navigation,
+  Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -98,6 +99,10 @@ export default function RadioPlayer() {
   });
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
+  const [isLive, setIsLive] = useState(false);
+  const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
+  const liveAudioRef = useRef<HTMLAudioElement | null>(null);
+  const peerConnection = useRef<RTCPeerConnection | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   // Refs
@@ -387,10 +392,74 @@ export default function RadioPlayer() {
     fetchInitialData();
 
     socket.on('listeners:count', (count: number) => setOnlineListeners(count));
+    
+    socket.on('live:status', ({ isLive: liveStatus }) => {
+      setIsLive(liveStatus);
+      if (!liveStatus) {
+        setLiveStream(null);
+        peerConnection.current?.close();
+        peerConnection.current = null;
+      }
+    });
+
+    socket.on('webrtc:offer', async ({ fromId, offer }) => {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+      peerConnection.current = pc;
+
+      pc.ontrack = (event) => {
+        setLiveStream(event.streams[0]);
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('webrtc:ice-candidate', {
+            targetId: fromId,
+            candidate: event.candidate
+          });
+        }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket.emit('webrtc:answer', {
+        targetId: fromId,
+        answer
+      });
+    });
+
+    socket.on('webrtc:ice-candidate', async ({ candidate }) => {
+      if (peerConnection.current) {
+        await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    });
+
     return () => {
       socket.off('listeners:count');
+      socket.off('live:status');
+      socket.off('webrtc:offer');
+      socket.off('webrtc:ice-candidate');
     };
   }, []);
+
+  // Request stream when live starts
+  useEffect(() => {
+    if (isLive && !liveStream) {
+      socket.emit('webrtc:request-stream');
+    }
+  }, [isLive, liveStream]);
+
+  // Handle live audio playback
+  useEffect(() => {
+    if (liveStream && liveAudioRef.current) {
+      liveAudioRef.current.srcObject = liveStream;
+      liveAudioRef.current.play().catch(console.error);
+      setIsPlaying(false); // Pause regular radio
+    }
+  }, [liveStream, setIsPlaying]);
 
   const handleNext = useCallback(() => {
     if (!currentStation || stations.length === 0) return;
@@ -648,6 +717,7 @@ export default function RadioPlayer() {
 
   return (
     <div className="flex h-screen bg-bg-dark text-white overflow-hidden font-display selection:bg-primary selection:text-white">
+      <audio ref={liveAudioRef} autoPlay />
       {/* Left Sidebar - Immersive Player (Hunter Style) */}
       <aside 
         className={`fixed inset-y-0 left-0 z-50 w-full sm:w-[400px] p-2 sm:p-4 transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
@@ -690,6 +760,13 @@ export default function RadioPlayer() {
             <div className="w-full flex items-center justify-center mb-6">
               <h1 className="text-xl sm:text-2xl font-black tracking-tighter uppercase text-white text-center drop-shadow-md">{branding.name}</h1>
             </div>
+
+            {isLive && (
+              <div className="mb-6 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-2xl flex items-center gap-3 animate-pulse">
+                <div className="size-2 bg-red-500 rounded-full" />
+                <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">ESTÚDIO AO VIVO</span>
+              </div>
+            )}
             
             {/* Avatar - Larger and more prominent as in screenshot */}
             <div className="size-20 sm:size-24 rounded-full border-4 border-white/20 overflow-hidden shadow-2xl hover:scale-110 transition-all duration-500 cursor-pointer bg-black/20 ring-4 ring-white/5 mb-6">
@@ -918,6 +995,13 @@ export default function RadioPlayer() {
             <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-full">
               <Menu className="size-5" />
             </button>
+
+            {isLive && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full animate-pulse">
+                <div className="size-1.5 bg-red-500 rounded-full" />
+                <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">LIVE</span>
+              </div>
+            )}
             
             <nav className="hidden xl:flex items-center gap-6">
               <button 
@@ -941,6 +1025,15 @@ export default function RadioPlayer() {
               <button className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">BIBLIOTECA</button>
               <Link to="/podcasts" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">PODCAST</Link>
               <Link to="/news" target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
+              {isAdmin && (
+                <Link 
+                  to="/studio" 
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary/80 transition-colors"
+                >
+                  <Activity className="size-3" />
+                  ESTÚDIO
+                </Link>
+              )}
             </nav>
 
             {/* Mobile Tab Switcher */}

@@ -67,15 +67,13 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
     };
 
     recog.onerror = (event: any) => {
+      if (event.error === 'no-speech' || event.error === 'aborted') {
+        // These are expected during normal operation, no need to log as error
+        console.log(`[VoiceControl] Info: ${event.error}`);
+        return;
+      }
+
       console.error('[VoiceControl] Error:', event.error);
-      
-      if (event.error === 'no-speech') {
-        return; // Normal if user doesn't talk for a bit
-      }
-      
-      if (event.error === 'aborted') {
-        return; // Normal if stop() was called
-      }
 
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setIsListening(false);
