@@ -108,10 +108,49 @@ export const useAudioMixer = () => {
     if (!audioContextRef.current) await initialize();
     const ctx = audioContextRef.current!;
 
+    // Ensure context is running
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
     try {
-      const response = await fetch(url);
-      const arrayBuffer = await response.arrayBuffer();
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      let arrayBuffer: ArrayBuffer;
+
+      if (url.startsWith('data:')) {
+        // Handle data URL
+        const base64 = url.split(',')[1];
+        const binaryString = window.atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        arrayBuffer = bytes.buffer;
+      } else {
+        // Handle regular URL
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar áudio: ${response.status} ${response.statusText}`);
+        }
+        
+        const contentType = response.headers.get('Content-Type');
+        if (contentType && !contentType.includes('audio') && !contentType.includes('application/octet-stream')) {
+          console.warn(`Unexpected content type: ${contentType}`);
+          // We still try to decode, but this is a red flag (e.g. HTML error page)
+        }
+        
+        arrayBuffer = await response.arrayBuffer();
+      }
+
+      if (arrayBuffer.byteLength === 0) {
+        throw new Error("O arquivo de áudio está vazio.");
+      }
+
+      // Use the newer promise-based decodeAudioData if available
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer).catch(err => {
+        console.error("decodeAudioData failed:", err);
+        throw new Error("Unable to decode audio data. The file might be corrupted or in an unsupported format.");
+      });
 
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
@@ -123,8 +162,16 @@ export const useAudioMixer = () => {
       gain.connect(masterGainRef.current!);
       
       source.start(0);
-    } catch (err) {
+      
+      // Cleanup
+      source.onended = () => {
+        source.disconnect();
+        gain.disconnect();
+      };
+    } catch (err: any) {
       console.error("Failed to play vignette:", err);
+      // Re-throw or handle as needed. For now, we'll just log it better.
+      throw err; 
     }
   }, [initialize]);
 

@@ -449,7 +449,14 @@ export const LiveStudio: React.FC = () => {
               {vignettes.map((v) => (
                 <div key={v.id} className="group relative">
                   <button
-                    onClick={() => playVignette(v.url)}
+                    onClick={async () => {
+                      try {
+                        await playVignette(v.url);
+                      } catch (err: any) {
+                        setStatusMessage({ type: 'error', text: 'Erro ao tocar vinheta: ' + (err.message || 'Falha no áudio') });
+                        setTimeout(() => setStatusMessage(null), 3000);
+                      }
+                    }}
                     className="w-full h-24 bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/50 transition-all text-left overflow-hidden"
                   >
                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary">{v.name}</span>
