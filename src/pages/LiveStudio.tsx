@@ -99,15 +99,25 @@ export const LiveStudio: React.FC = () => {
     };
   }, []);
 
-  // Ref for isOnAir to be used in socket listeners without re-binding
+  // Ref for isOnAir and isVignettePlaying to be used in socket listeners without re-binding
   const isOnAirRef = useRef(isOnAir);
+  const isVignettePlayingRef = useRef(isVignettePlaying);
+  
   useEffect(() => {
     isOnAirRef.current = isOnAir;
   }, [isOnAir]);
 
   useEffect(() => {
+    isVignettePlayingRef.current = isVignettePlaying;
+  }, [isVignettePlaying]);
+
+  useEffect(() => {
     const onStreamRequest = async ({ listenerId }: { listenerId: string }) => {
-      if (!isOnAirRef.current) return;
+      // Allow stream if on air OR if a vignette is playing
+      if (!isOnAirRef.current && !isVignettePlayingRef.current) {
+        console.log(`[Studio] Ignorando pedido de stream de ${listenerId} (Estúdio Offline e sem vinheta)`);
+        return;
+      }
       
       const stream = getMixedStream();
       if (!stream) {

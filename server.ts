@@ -34,12 +34,20 @@ async function startServer() {
     console.log("User connected:", socket.id);
     
     // Update listener count for everyone
-    io.emit("listeners:count", io.engine.clientsCount);
+    const currentCount = io.engine.clientsCount;
+    io.emit("listeners:count", currentCount);
+    
+    // Also send specifically to this socket to ensure they get it immediately
+    socket.emit("listeners:count", currentCount);
 
     // Send initial state
     socket.emit("chat:history", messages);
     socket.emit("live:status", { isLive, broadcasterId: liveBroadcasterId });
     socket.emit("votes:initial", stationVotes);
+
+    socket.on("listeners:request", () => {
+      socket.emit("listeners:count", io.engine.clientsCount);
+    });
 
     socket.on("station:vote", ({ stationId, type }: { stationId: string, type: 'like' | 'dislike' | 'remove_like' | 'remove_dislike' }) => {
       if (!stationVotes[stationId]) {
@@ -90,13 +98,17 @@ async function startServer() {
     });
 
     socket.on("vignette:start", () => {
-      console.log("[Socket] Vignette START event received from", socket.id);
-      io.emit("vignette:start");
+      if (socket.id === liveBroadcasterId) {
+        console.log("[Socket] Vignette START event received from broadcaster", socket.id);
+        io.emit("vignette:start");
+      }
     });
 
     socket.on("vignette:end", () => {
-      console.log("[Socket] Vignette END event received from", socket.id);
-      io.emit("vignette:end");
+      if (socket.id === liveBroadcasterId) {
+        console.log("[Socket] Vignette END event received from broadcaster", socket.id);
+        io.emit("vignette:end");
+      }
     });
 
     // WebRTC Signaling Relay

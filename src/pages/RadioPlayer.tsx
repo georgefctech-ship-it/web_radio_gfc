@@ -102,6 +102,8 @@ export default function RadioPlayer() {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [onlineListeners, setOnlineListeners] = useState(0);
+  const [isLiveAudioPlaying, setIsLiveAudioPlaying] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'map' | 'chat'>('explore');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
@@ -471,7 +473,13 @@ export default function RadioPlayer() {
     socket.on('connect', () => console.log("[Player] Socket connected"));
     socket.on('disconnect', () => console.log("[Player] Socket disconnected"));
 
-    socket.on('listeners:count', (count: number) => setOnlineListeners(count));
+    socket.on('listeners:count', (count: number) => {
+      console.log("[Socket] Received listener count:", count);
+      setOnlineListeners(count);
+    });
+    
+    // Request initial count
+    socket.emit('listeners:request');
     
     socket.on('live:status', ({ isLive: liveStatus }) => {
       setIsLive(liveStatus);
@@ -557,21 +565,37 @@ export default function RadioPlayer() {
     };
   }, []);
 
-  // Request stream when live starts
+  // Request stream when live starts or vignette plays
   useEffect(() => {
-    if (isLive && !liveStream) {
+    if ((isLive || isVignettePlaying) && !liveStream) {
+      console.log("[WebRTC] Requesting stream (Live:", isLive, "Vignette:", isVignettePlaying, ")");
       socket.emit('webrtc:request-stream');
     }
-  }, [isLive, liveStream]);
+  }, [isLive, isVignettePlaying, liveStream]);
 
-  // Handle live audio playback with ducking
+  // Handle live audio playback with ducking and error handling
   useEffect(() => {
     if (liveStream && liveAudioRef.current) {
-      liveAudioRef.current.srcObject = liveStream;
-      liveAudioRef.current.play().catch(console.error);
-      setIsDucked(true);
+      const audio = liveAudioRef.current;
+      audio.srcObject = liveStream;
+      
+      const playAudio = async () => {
+        try {
+          await audio.play();
+          setIsLiveAudioPlaying(true);
+          setAudioError(null);
+          setIsDucked(true);
+        } catch (err) {
+          console.error("[Audio] Playback failed:", err);
+          setIsLiveAudioPlaying(false);
+          setAudioError("Clique para ouvir o áudio ao vivo");
+        }
+      };
+
+      playAudio();
     } else {
       setIsDucked(false);
+      setIsLiveAudioPlaying(false);
     }
   }, [liveStream, setIsDucked]);
 
@@ -1191,8 +1215,16 @@ export default function RadioPlayer() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="fixed bottom-32 left-1/2 -translate-x-1/2 z-40"
+                className="fixed bottom-32 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2"
               >
+                {!isLiveAudioPlaying && audioError && (
+                  <button 
+                    onClick={() => liveAudioRef.current?.play().then(() => setIsLiveAudioPlaying(true))}
+                    className="px-4 py-2 bg-primary text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl hover:scale-105 transition-transform"
+                  >
+                    {audioError}
+                  </button>
+                )}
                 <div className={`px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md border ${
                   isVignettePlaying 
                     ? 'bg-primary/20 border-primary/30 text-primary' 
