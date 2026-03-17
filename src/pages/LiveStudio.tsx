@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2 } from 'lucide-react';
+import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2, Zap } from 'lucide-react';
 import { socket } from '../lib/socket';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAudioMixer } from '../hooks/useAudioMixer';
@@ -32,6 +32,7 @@ export const LiveStudio: React.FC = () => {
   } = useAudioMixer();
 
   const [isOnAir, setIsOnAir] = useState(false);
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [listeners, setListeners] = useState(0);
   const [latency, setLatency] = useState<number | null>(null);
   const [vignettes, setVignettes] = useState<Vignette[]>([]);
@@ -192,17 +193,27 @@ export const LiveStudio: React.FC = () => {
 
   useEffect(() => {
     console.log("[Studio] Socket status:", socket.connected ? "Connected" : "Disconnected");
+    setSocketStatus(socket.connected ? 'connected' : 'connecting');
+    
     const onConnect = () => {
       console.log("[Studio] Socket connected");
+      setSocketStatus('connected');
       if (isOnAirRef.current) {
         console.log("[Studio] Re-emitting live:start after reconnection");
         socket.emit('live:start');
       }
     };
-    const onDisconnect = () => console.log("[Studio] Socket disconnected");
+    const onDisconnect = () => {
+      console.log("[Studio] Socket disconnected");
+      setSocketStatus('disconnected');
+    };
     
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', (err) => {
+      console.error("[Studio] Socket connection error:", err);
+      setSocketStatus('disconnected');
+    });
     
     // Latency monitoring
     const latencyInterval = setInterval(async () => {
@@ -466,6 +477,30 @@ export const LiveStudio: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-6">
+          <div className={`flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10 ${
+            socketStatus === 'connecting' ? 'animate-pulse' : ''
+          }`}>
+            <div className={`size-1.5 rounded-full ${
+              socketStatus === 'connected' ? 'bg-emerald-500' : 
+              socketStatus === 'connecting' ? 'bg-yellow-500' : 
+              'bg-red-500'
+            }`} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+              {socketStatus === 'connected' ? 'Online' : 
+               socketStatus === 'connecting' ? 'Conectando' : 
+               'Offline'}
+            </span>
+            {(socketStatus === 'disconnected' || socketStatus === 'connecting') && (
+              <button 
+                onClick={() => socket.disconnect().connect()}
+                className="ml-1 p-1 hover:bg-white/10 rounded-full transition-colors"
+                title="Reconectar"
+              >
+                <Zap className="size-2 text-primary" />
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
             <Users className="size-4 text-primary" />
             <span className="text-xs font-black">{listeners} OUVINTES</span>

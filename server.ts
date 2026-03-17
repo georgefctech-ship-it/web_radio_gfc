@@ -97,10 +97,10 @@ async function startServer() {
       }
     });
 
-    socket.on("vignette:start", () => {
+    socket.on("vignette:start", (data) => {
       if (socket.id === liveBroadcasterId) {
-        console.log("[Socket] Vignette START event received from broadcaster", socket.id);
-        io.emit("vignette:start");
+        console.log("[Socket] Vignette START event received from broadcaster", socket.id, data?.url);
+        io.emit("vignette:start", data);
       }
     });
 

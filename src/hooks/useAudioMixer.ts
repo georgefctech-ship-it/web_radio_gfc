@@ -215,8 +215,8 @@ export const useAudioMixer = () => {
       const vignetteId = Math.random().toString(36).substring(7);
       activeVignettesRef.current.set(vignetteId, { source, gain });
 
-      console.log("[AudioMixer] Emitting vignette:start");
-      socket.emit('vignette:start');
+      console.log("[AudioMixer] Emitting vignette:start", url);
+      socket.emit('vignette:start', { url });
       setIsVignettePlaying(true);
       source.start(0);
       

@@ -61,23 +61,6 @@ import { useVoiceControl } from '../hooks/useVoiceControl';
 const LIBRARIES: ("places")[] = ["places"];
 
 export default function RadioPlayer() {
-  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
-
-  useEffect(() => {
-    const onConnect = () => setSocketStatus('connected');
-    const onDisconnect = () => setSocketStatus('disconnected');
-    
-    if (socket.connected) setSocketStatus('connected');
-    
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-    };
-  }, []);
-
   // Global Player State
   const { 
     currentStation, 
@@ -102,8 +85,11 @@ export default function RadioPlayer() {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [onlineListeners, setOnlineListeners] = useState(0);
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [isLiveAudioPlaying, setIsLiveAudioPlaying] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [vignetteUrl, setVignetteUrl] = useState<string | null>(null);
+  const vignetteAudioRef = useRef<HTMLAudioElement | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'map' | 'chat'>('explore');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
@@ -470,8 +456,22 @@ export default function RadioPlayer() {
     fetchInitialData();
 
     console.log("[Player] Socket status:", socket.connected ? "Connected" : "Disconnected");
-    socket.on('connect', () => console.log("[Player] Socket connected"));
-    socket.on('disconnect', () => console.log("[Player] Socket disconnected"));
+    setSocketStatus(socket.connected ? 'connected' : 'connecting');
+    
+    socket.on('connect', () => {
+      console.log("[Player] Socket connected");
+      setSocketStatus('connected');
+    });
+    
+    socket.on('disconnect', () => {
+      console.log("[Player] Socket disconnected");
+      setSocketStatus('disconnected');
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error("[Player] Socket connection error:", err);
+      setSocketStatus('disconnected');
+    });
 
     socket.on('listeners:count', (count: number) => {
       console.log("[Socket] Received listener count:", count);
@@ -491,8 +491,30 @@ export default function RadioPlayer() {
       }
     });
 
-    socket.on('vignette:start', () => setIsVignettePlaying(true));
-    socket.on('vignette:end', () => setIsVignettePlaying(false));
+    socket.on('vignette:start', (data?: { url?: string }) => {
+      console.log("[Socket] Vignette START", data?.url);
+      setIsVignettePlaying(true);
+      if (data?.url) {
+        setVignetteUrl(data.url);
+        // Fallback: If live audio is not playing, try to play vignette directly
+        if (!isLiveAudioPlaying && vignetteAudioRef.current) {
+          vignetteAudioRef.current.src = data.url;
+          vignetteAudioRef.current.play().catch(err => {
+            console.warn("[Audio] Vignette fallback autoplay blocked:", err);
+          });
+        }
+      }
+    });
+    
+    socket.on('vignette:end', () => {
+      console.log("[Socket] Vignette END");
+      setIsVignettePlaying(false);
+      setVignetteUrl(null);
+      if (vignetteAudioRef.current) {
+        vignetteAudioRef.current.pause();
+        vignetteAudioRef.current.src = "";
+      }
+    });
 
     socket.on('webrtc:offer', async ({ fromId, offer }) => {
       console.log(`[Player] Recebida oferta WebRTC de ${fromId}`);
@@ -856,6 +878,7 @@ export default function RadioPlayer() {
   return (
     <div className="flex h-screen bg-bg-dark text-white overflow-hidden font-display selection:bg-primary selection:text-white">
       <audio ref={liveAudioRef} autoPlay />
+      <audio ref={vignetteAudioRef} className="hidden" />
       {/* Left Sidebar - Immersive Player (Hunter Style) */}
       <aside 
         className={`fixed inset-y-0 left-0 z-50 w-full sm:w-[400px] p-2 sm:p-4 transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
@@ -1174,6 +1197,17 @@ export default function RadioPlayer() {
                    socketStatus === 'connecting' ? 'Conectando' : 
                    'Offline'}
                 </span>
+                {(socketStatus === 'disconnected' || socketStatus === 'connecting') && (
+                  <button 
+                    onClick={() => {
+                      socket.disconnect().connect();
+                    }}
+                    className="ml-1 p-1 hover:bg-white/10 rounded-full transition-colors"
+                    title="Reconectar"
+                  >
+                    <Zap className="size-2 text-primary" />
+                  </button>
+                )}
               </div>
 
               {latency && (
@@ -1219,9 +1253,22 @@ export default function RadioPlayer() {
               >
                 {!isLiveAudioPlaying && audioError && (
                   <button 
-                    onClick={() => liveAudioRef.current?.play().then(() => setIsLiveAudioPlaying(true))}
-                    className="px-4 py-2 bg-primary text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl hover:scale-105 transition-transform"
+                    onClick={() => {
+                      if (liveAudioRef.current) {
+                        liveAudioRef.current.play()
+                          .then(() => {
+                            setIsLiveAudioPlaying(true);
+                            setAudioError(null);
+                          })
+                          .catch(err => {
+                            console.error("[Audio] Manual play failed:", err);
+                            setAudioError("Erro ao iniciar áudio. Clique novamente.");
+                          });
+                      }
+                    }}
+                    className="px-6 py-3 bg-primary text-white rounded-full text-[12px] font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border-2 border-white/20"
                   >
+                    <Play className="size-4 fill-current" />
                     {audioError}
                   </button>
                 )}
