@@ -9,42 +9,66 @@ const EVENT_SITES = [
     url: 'https://www.guicheweb.com.br/',
     description: 'Venda de ingressos para os melhores eventos, shows, teatros e muito mais.',
     category: 'Ingressos',
-    image: 'https://s0.wp.com/mshots/v1/https://www.guicheweb.com.br/?w=800&h=400'
+    image: 'https://image.thum.io/get/width/800/crop/600/https://www.guicheweb.com.br/'
   },
   {
     name: 'UZNA',
     url: 'https://www.instagram.com/uzna.oficial/channel/',
     description: 'A maior arena de eventos da região de Sorocaba. Confira a programação completa no Instagram oficial.',
     category: 'Arena de Eventos',
-    image: 'https://s0.wp.com/mshots/v1/https://www.instagram.com/uzna.oficial/channel/?w=800&h=400'
+    image: 'https://picsum.photos/seed/uzna-arena/800/400' // Instagram blocks screenshots, using a themed fallback
   },
   {
     name: 'Sympla',
     url: 'https://www.sympla.com.br/',
     description: 'A maior plataforma de eventos do Brasil. Encontre shows, festas, cursos e eventos online.',
     category: 'Eventos',
-    image: 'https://s0.wp.com/mshots/v1/https://www.sympla.com.br/?w=800&h=400'
+    image: 'https://image.thum.io/get/width/800/crop/600/https://www.sympla.com.br/'
   },
   {
     name: 'Eventim',
     url: 'https://www.eventim.com.br/',
     description: 'Ingressos para os maiores shows internacionais e eventos culturais no Brasil.',
     category: 'Shows Internacionais',
-    image: 'https://s0.wp.com/mshots/v1/https://www.eventim.com.br/?w=800&h=400'
+    image: 'https://image.thum.io/get/width/800/crop/600/https://www.eventim.com.br/'
   },
   {
     name: 'Uhuu',
     url: 'https://www.uhuu.com/',
     description: 'Sua plataforma de entretenimento. Ingressos para shows, teatro e experiências únicas.',
     category: 'Entretenimento',
-    image: 'https://s0.wp.com/mshots/v1/https://www.uhuu.com/?w=800&h=400'
+    image: 'https://image.thum.io/get/width/800/crop/600/https://www.uhuu.com/'
   },
   {
     name: 'Ticket360',
     url: 'https://www.ticket360.com.br/',
     description: 'Ingressos para os melhores shows e eventos de São Paulo e de todo o Brasil.',
     category: 'Shows',
-    image: 'https://s0.wp.com/mshots/v1/https://www.ticket360.com.br/?w=800&h=400'
+    image: 'https://image.thum.io/get/width/800/crop/600/https://www.ticket360.com.br/'
+  }
+];
+
+const FEATURED_EVENTS = [
+  {
+    title: 'Show na UZNA Arena',
+    location: 'Sorocaba, SP',
+    image: 'https://picsum.photos/seed/uzna-concert/400/500',
+    link: 'https://www.instagram.com/uzna.oficial/channel/',
+    provider: 'UZNA'
+  },
+  {
+    title: 'Grandes Shows Interior',
+    location: 'Região de Sorocaba, SP',
+    image: 'https://picsum.photos/seed/interior-show/400/500',
+    link: 'https://www.guicheweb.com.br/',
+    provider: 'Guichê Web'
+  },
+  {
+    title: 'Eventos Culturais SP',
+    location: 'Interior de São Paulo',
+    image: 'https://picsum.photos/seed/sp-culture/400/500',
+    link: 'https://www.eventim.com.br/',
+    provider: 'Eventim'
   }
 ];
 
@@ -84,6 +108,10 @@ export default function GuicheWeb() {
                   src={site.image} 
                   alt={site.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${site.name}/800/400`;
+                  }}
                 />
                 <div className="absolute top-4 left-4">
                   <span className="px-3 py-1 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold rounded-full uppercase tracking-wider">
@@ -127,16 +155,32 @@ export default function GuicheWeb() {
           <div className="relative z-10">
             <h2 className="text-3xl font-black mb-8 uppercase tracking-tighter">Eventos em Destaque</h2>
             <div className="grid sm:grid-cols-3 gap-6">
-              {[1, 2, 3].map((n) => (
-                <div key={n} className="space-y-3">
-                  <div className="aspect-[4/5] rounded-2xl overflow-hidden">
-                    <img src={`https://picsum.photos/seed/event-${n}/400/500`} className="w-full h-full object-cover" alt="" />
+              {FEATURED_EVENTS.map((event, i) => (
+                <a 
+                  key={i} 
+                  href={event.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group space-y-3 block"
+                >
+                  <div className="aspect-[4/5] rounded-2xl overflow-hidden relative">
+                    <img 
+                      src={event.image} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                      alt={event.title} 
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute top-3 left-3">
+                      <span className="px-2 py-1 bg-primary text-white text-[8px] font-black uppercase tracking-widest rounded-md">
+                        {event.provider}
+                      </span>
+                    </div>
                   </div>
-                  <h4 className="font-bold text-sm">Festival de Verão 2026</h4>
+                  <h4 className="font-bold text-sm group-hover:text-primary transition-colors">{event.title}</h4>
                   <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                    <MapPin className="size-3" /> São Paulo, SP
+                    <MapPin className="size-3" /> {event.location}
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           </div>
