@@ -41,7 +41,13 @@ import {
   MicOff,
   Navigation,
   Activity,
-  LogOut
+  Instagram,
+  Youtube,
+  Facebook,
+  Linkedin,
+  AtSign,
+  Twitter,
+  Music2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -458,8 +464,10 @@ export default function RadioPlayer() {
       peerConnection.current = pc;
 
       pc.ontrack = (event) => {
-        console.log("[Player] Track recebida do estúdio:", event.streams[0].id);
-        setLiveStream(event.streams[0]);
+        console.log("[Player] Track recebida do estúdio:", event.streams[0]?.id);
+        if (event.streams && event.streams[0]) {
+          setLiveStream(event.streams[0]);
+        }
       };
 
       pc.onicecandidate = (event) => {
@@ -1240,6 +1248,18 @@ export default function RadioPlayer() {
             <button className="hover:text-white transition-colors">POLÍTICA DE PRIVACIDADE</button>
             <Link to="/support" className="hover:text-white transition-colors">SUPORTE</Link>
           </div>
+
+          {/* Social Media Icons - Centered */}
+          <div className="flex items-center gap-4 px-4 border-x border-white/5 h-8">
+            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Instagram className="size-4" /></a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Music2 className="size-4" /></a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Twitter className="size-4" /></a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors"><AtSign className="size-4" /></a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Youtube className="size-4" /></a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Facebook className="size-4" /></a>
+            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Linkedin className="size-4" /></a>
+          </div>
+
           <div className="whitespace-nowrap ml-4">© 2026 {branding.name} - Todos os direitos reservados</div>
         </footer>
       </main>

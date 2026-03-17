@@ -175,17 +175,29 @@ export const LiveStudio: React.FC = () => {
     if (!isOnAir) {
       try {
         await initialize();
+        
+        // Automatically activate mic if not active
+        if (!isMicActive) {
+          await toggleMic();
+        }
+        
         socket.emit('live:start');
         setIsOnAir(true);
-        setStatusMessage({ type: 'success', text: 'Você está no ar!' });
+        setStatusMessage({ type: 'success', text: 'Você está no ar! Fale agora.' });
         setTimeout(() => setStatusMessage(null), 3000);
       } catch (err) {
         console.error("[Studio] Erro ao iniciar transmissão:", err);
-        setStatusMessage({ type: 'error', text: 'Erro ao acessar microfone.' });
+        setStatusMessage({ type: 'error', text: 'Erro ao acessar microfone. Verifique as permissões.' });
       }
     } else {
       socket.emit('live:stop');
       setIsOnAir(false);
+      
+      // Stop mic when stopping broadcast (optional, but cleaner)
+      if (isMicActive) {
+        await toggleMic();
+      }
+      
       Object.values(peerConnections.current).forEach(pc => pc.close());
       peerConnections.current = {};
     }
@@ -241,9 +253,11 @@ export const LiveStudio: React.FC = () => {
     setIsGeneratingVignette(true);
     console.log("[Studio] Iniciando geração de vinheta com IA...");
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      // Try both Vite and process.env for compatibility
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : null);
+      
       if (!apiKey) {
-        throw new Error("GEMINI_API_KEY não configurada no ambiente.");
+        throw new Error("GEMINI_API_KEY não encontrada. Se você estiver no Vercel, adicione-a nas variáveis de ambiente.");
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -366,17 +380,26 @@ export const LiveStudio: React.FC = () => {
                 {/* Mic Channel */}
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Microfone</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Canal 01</span>
+                      <span className="text-[12px] font-black uppercase text-white">Microfone</span>
+                    </div>
                     <button 
                       onClick={toggleMic}
-                      className={`size-10 rounded-xl flex items-center justify-center transition-all ${
-                        isMicActive ? 'bg-primary text-white' : 'bg-white/5 text-gray-500'
+                      className={`size-12 rounded-2xl flex items-center justify-center transition-all shadow-xl ${
+                        isMicActive 
+                          ? 'bg-red-500 text-white animate-pulse shadow-red-500/20' 
+                          : 'bg-white/5 text-gray-500 hover:bg-white/10'
                       }`}
+                      title="Mandar um Alô"
                     >
-                      {isMicActive ? <Mic className="size-5" /> : <MicOff className="size-5" />}
+                      {isMicActive ? <Mic className="size-6" /> : <MicOff className="size-6" />}
                     </button>
                   </div>
-                  <div className="h-64 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5">
+                  <div className="h-64 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5 relative">
+                    <div className="absolute -left-8 top-1/2 -translate-y-1/2 -rotate-90 text-[8px] font-black uppercase tracking-[0.3em] text-gray-600">
+                      Volume Locução
+                    </div>
                     <input 
                       type="range" 
                       min="0" 
@@ -394,12 +417,18 @@ export const LiveStudio: React.FC = () => {
                 {/* Master Channel */}
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Master Out</span>
-                    <div className="size-10 rounded-xl bg-white/5 flex items-center justify-center text-primary">
-                      <Volume2 className="size-5" />
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Saída</span>
+                      <span className="text-[12px] font-black uppercase text-white">Master</span>
+                    </div>
+                    <div className={`size-12 rounded-2xl flex items-center justify-center bg-white/5 ${isOnAir ? 'text-red-500' : 'text-gray-500'}`}>
+                      <Volume2 className="size-6" />
                     </div>
                   </div>
-                  <div className="h-64 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5">
+                  <div className="h-64 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5 relative">
+                    <div className="absolute -right-8 top-1/2 -translate-y-1/2 rotate-90 text-[8px] font-black uppercase tracking-[0.3em] text-gray-600">
+                      Volume Geral
+                    </div>
                     <input 
                       type="range" 
                       min="0" 
@@ -570,6 +599,12 @@ export const LiveStudio: React.FC = () => {
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors min-h-[100px] resize-none"
                     placeholder="Ex: Diga com voz de rádio: George Fctech, a melhor rádio!"
                   />
+                </div>
+                
+                <div className="p-4 bg-primary/5 border border-primary/20 rounded-2xl">
+                  <p className="text-[10px] text-primary font-bold leading-relaxed">
+                    Nota: Se você estiver usando o Vercel, certifique-se de configurar a variável <code className="bg-primary/10 px-1 rounded">GEMINI_API_KEY</code> nas configurações do seu projeto para que a geração funcione.
+                  </p>
                 </div>
                 
                 <button 

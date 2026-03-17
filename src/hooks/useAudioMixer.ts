@@ -46,6 +46,9 @@ export const useAudioMixer = () => {
     analyser.connect(dest);
     analyser.connect(ctx.destination); // Monitor locally
 
+    console.log("[AudioMixer] Initialized. Stream tracks:", dest.stream.getTracks().length);
+    dest.stream.getTracks().forEach(t => console.log(`[AudioMixer] Track: ${t.kind}, ID: ${t.id}, Enabled: ${t.enabled}`));
+
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
