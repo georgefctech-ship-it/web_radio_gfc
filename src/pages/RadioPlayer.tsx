@@ -113,8 +113,8 @@ export default function RadioPlayer() {
   const [mapsAuthError, setMapsAuthError] = useState(false);
   const [dominantColor, setDominantColor] = useState<string>('#E11D48'); // Default primary color
   const [branding, setBranding] = useState({ 
-    name: 'Radio GeorgeFctech', 
-    logo: 'https://bcfckpzvbltnsryqbwif.supabase.co/storage/v1/object/public/meus_arquivos/logo-web-radio.png',
+    name: 'RÁDIO GFC', 
+    logo: 'https://picsum.photos/seed/radio-gfc/800',
     maintenanceMode: false
   });
   const [isDriverMode, setIsDriverMode] = useState(false);
@@ -872,14 +872,19 @@ export default function RadioPlayer() {
     return (
       <div className="min-h-screen bg-bg-dark flex flex-col items-center justify-center p-6 text-center space-y-8">
         <div className="relative">
-          <div className="size-24 bg-primary/10 rounded-[40px] flex items-center justify-center animate-pulse border border-primary/20">
-            <Radio className="size-12 text-primary animate-bounce" />
+          <div className="size-32 bg-primary/10 rounded-[40px] flex items-center justify-center animate-pulse border border-primary/20 overflow-hidden">
+            <img 
+              src={branding.logo} 
+              alt={branding.name} 
+              className="w-full h-full object-cover opacity-80"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div className="absolute -inset-4 bg-primary/5 blur-2xl rounded-full animate-pulse" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-black uppercase tracking-tighter animate-pulse">Sintonizando...</h1>
-          <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em]">Carregando as melhores estações</p>
+          <h1 className="text-2xl font-black uppercase tracking-tighter animate-pulse">{branding.name}</h1>
+          <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em]">Sintonizando as melhores estações</p>
         </div>
         <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
           <motion.div 
@@ -934,14 +939,15 @@ export default function RadioPlayer() {
             <div className="w-full flex items-center justify-between mb-4">
               <button 
                 onClick={() => {
-                  setIsDriverMode(!isDriverMode);
-                  if (!isDriverMode && !isListening) toggleListening();
-                  if (isDriverMode && isListening) toggleListening();
+                  const nextMode = !isDriverMode;
+                  setIsDriverMode(nextMode);
+                  if (nextMode && !isListening) toggleListening();
+                  if (!nextMode && isListening) toggleListening();
                 }}
-                className={`p-2 transition-all rounded-xl ${isDriverMode ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-white/80 hover:text-white'}`}
+                className={`p-3 transition-all rounded-xl ${isDriverMode ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-white/80 hover:text-white'}`}
                 title="Modo Motorista (Voz)"
               >
-                <Navigation className={`size-5 ${isDriverMode ? 'animate-pulse' : ''}`} />
+                <Navigation className={`size-6 ${isDriverMode ? 'animate-pulse' : ''}`} />
               </button>
 
               <div className="flex items-center gap-2">
@@ -977,11 +983,10 @@ export default function RadioPlayer() {
               </div>
             )}
             
-            {/* Big Station Logo - Hunter Style Centerpiece */}
             <div className="w-full max-w-[320px] sm:max-w-[440px] aspect-square rounded-3xl border-4 border-white/20 overflow-hidden shadow-2xl bg-black/40 mb-2 group relative">
               <img 
-                src={currentStation?.favicon || `https://picsum.photos/seed/${currentStation?.name}/800`} 
-                alt={currentStation?.name || 'Radio Logo'} 
+                src={currentStation?.favicon || branding.logo} 
+                alt={currentStation?.name || branding.name} 
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
@@ -1047,11 +1052,11 @@ export default function RadioPlayer() {
               <div className="flex items-center gap-0.5">
                 <button 
                   onClick={toggleListening}
-                  className={`p-1.5 transition-all rounded-full ${isListening ? 'text-primary' : 'text-white/80 hover:text-white'}`}
+                  className={`p-3 transition-all rounded-full ${isListening ? 'text-primary' : 'text-white/80 hover:text-white'}`}
                   style={isListening ? { color: dominantColor } : {}}
                   title="Comando de Voz"
                 >
-                  {isListening ? <Mic className="size-5 animate-pulse" /> : <Mic className="size-5" />}
+                  {isListening ? <Mic className="size-6 animate-pulse" /> : <Mic className="size-6" />}
                 </button>
 
                 <div 

@@ -7,127 +7,151 @@ interface VoiceControlOptions {
 
 export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlOptions) {
   const [isListening, setIsListening] = useState(false);
-  const isListeningRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const [recognition, setRecognition] = useState<any>(null);
+  const recognitionRef = useRef<any>(null);
+  const isListeningIntentRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const onCommandRef = useRef(onCommand);
 
-  // Sync ref with state
+  // Keep onCommand ref up to date
   useEffect(() => {
-    isListeningRef.current = isListening;
-  }, [isListening]);
+    onCommandRef.current = onCommand;
+  }, [onCommand]);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
-      setError('Speech Recognition not supported in this browser.');
+      setError('Reconhecimento de voz não suportado neste navegador.');
       return;
     }
 
-    const recog = new SpeechRecognition();
-    recog.continuous = true;
-    recog.interimResults = false;
-    recog.lang = language;
+    const recognition = new SpeechRecognition();
+    // Use continuous = false for more predictable behavior on mobile
+    // We handle the restart manually in onend
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = language;
 
-    recog.onresult = (event: any) => {
-      const last = event.results.length - 1;
-      const text = event.results[last][0].transcript.toLowerCase().trim();
-      console.log('[VoiceControl] Received:', text);
-
-      // Command logic
-      const isEnglish = language.startsWith('en');
-
-      if (text.includes('toque') || text.includes('tocar') || text.includes('play station') || text.includes('tune to')) {
-        const stationName = text.replace(/toque|tocar|play station|tune to/g, '').trim();
-        onCommand('play_station', stationName);
-      } else if (text.includes('próxima') || text.includes('proxima') || text.includes('next')) {
-        onCommand('next');
-      } else if (text.includes('anterior') || text.includes('volta') || text.includes('previous') || text.includes('back')) {
-        onCommand('previous');
-      } else if (text.includes('mute') || text.includes('mudo') || text.includes('silêncio') || text.includes('silent')) {
-        onCommand('mute');
-      } else if (text.includes('play') || text.includes('tocar rádio') || text.includes('start')) {
-        onCommand('play');
-      } else if (text.includes('pause') || text.includes('parar') || text.includes('stop')) {
-        onCommand('pause');
-      } else if (text.includes('volume alto') || text.includes('aumentar volume') || text.includes('volume up') || text.includes('louder')) {
-        onCommand('volume_up');
-      } else if (text.includes('volume baixo') || text.includes('abaixar volume') || text.includes('volume down') || text.includes('quieter')) {
-        onCommand('volume_down');
-      } else if (text.includes('ajuda') || text.includes('comandos') || text.includes('help') || text.includes('commands')) {
-        onCommand('help');
-      }
-    };
-
-    recog.onstart = () => {
-      console.log('[VoiceControl] Started listening');
+    recognition.onstart = () => {
+      console.log('[VoiceControl] Started');
       setIsListening(true);
-      isListeningRef.current = true;
+      isStartingRef.current = false;
       setError(null);
     };
 
-    recog.onerror = (event: any) => {
-      if (event.error === 'no-speech' || event.error === 'aborted') {
-        // These are expected during normal operation, no need to log as error
-        console.log(`[VoiceControl] Info: ${event.error}`);
+    recognition.onresult = (event: any) => {
+      const last = event.results.length - 1;
+      const text = event.results[last][0].transcript.toLowerCase().trim();
+      console.log('[VoiceControl] Result:', text);
+
+      const cmd = onCommandRef.current;
+      
+      // Improved command matching with more synonyms
+      if (text.includes('toque') || text.includes('tocar') || text.includes('sintonizar') || text.includes('tune to') || text.includes('coloca na') || text.includes('mudar para')) {
+        const stationName = text.replace(/toque|tocar|sintonizar|tune to|rádio|radio|coloca na|mudar para/g, '').trim();
+        if (stationName) cmd('play_station', stationName);
+      } else if (text.includes('próxima') || text.includes('proxima') || text.includes('next') || text.includes('seguinte') || text.includes('pular') || text.includes('passar')) {
+        cmd('next');
+      } else if (text.includes('anterior') || text.includes('volta') || text.includes('previous') || text.includes('atrás') || text.includes('voltar')) {
+        cmd('previous');
+      } else if (text.includes('mute') || text.includes('mudo') || text.includes('silêncio') || text.includes('silent') || text.includes('desativar som') || text.includes('sem som')) {
+        cmd('mute');
+      } else if (text.includes('play') || text.includes('tocar') || text.includes('iniciar') || text.includes('start') || text.includes('continuar')) {
+        // Only trigger 'play' if it's not a 'play_station' command
+        if (!text.includes('toque') && !text.includes('tocar ') && !text.includes('coloca na')) {
+          cmd('play');
+        }
+      } else if (text.includes('pause') || text.includes('parar') || text.includes('stop') || text.includes('pausar') || text.includes('interromper')) {
+        cmd('pause');
+      } else if (text.includes('volume alto') || text.includes('aumentar volume') || text.includes('mais alto') || text.includes('volume up') || text.includes('aumentar o som')) {
+        cmd('volume_up');
+      } else if (text.includes('volume baixo') || text.includes('abaixar volume') || text.includes('mais baixo') || text.includes('volume down') || text.includes('abaixar o som')) {
+        cmd('volume_down');
+      } else if (text.includes('ajuda') || text.includes('comandos') || text.includes('help') || text.includes('commands') || text.includes('o que você faz')) {
+        cmd('help');
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      isStartingRef.current = false;
+      
+      if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'network' || event.error === 'aborted') {
+        // These are common and should just trigger a restart if intent is true
+        // We log them as info instead of error to avoid cluttering
+        console.log(`[VoiceControl] Info (expected): ${event.error}`);
         return;
       }
 
       console.error('[VoiceControl] Error:', event.error);
 
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        isListeningIntentRef.current = false;
         setIsListening(false);
-        isListeningRef.current = false;
-        setError('Permissão de microfone negada. Verifique as configurações do navegador.');
+        setError('Permissão de microfone negada.');
       } else {
         setError(`Erro no reconhecimento de voz: ${event.error}`);
       }
     };
 
-    recog.onend = () => {
-      // Only restart if the user's intent is still to listen and it wasn't a fatal error
-      if (isListeningRef.current) {
+    recognition.onend = () => {
+      console.log('[VoiceControl] Ended');
+      isStartingRef.current = false;
+      
+      // Auto-restart if the user still wants to listen
+      if (isListeningIntentRef.current) {
         setTimeout(() => {
-          if (isListeningRef.current) {
+          if (isListeningIntentRef.current && !isStartingRef.current) {
             try {
-              recog.start();
+              isStartingRef.current = true;
+              recognition.start();
             } catch (e) {
-              // If it's already started, this will fail silently which is fine
+              console.error('[VoiceControl] Failed to restart:', e);
+              isStartingRef.current = false;
             }
           }
-        }, 300); // Small delay before restart to avoid 'aborted' loops
+        }, 400); // Slightly longer delay for mobile stability
       } else {
         setIsListening(false);
       }
     };
 
-    setRecognition(recog);
-  }, [language, onCommand]);
+    recognitionRef.current = recognition;
 
-  const toggleListening = useCallback(() => {
-    if (!recognition) return;
-
-    if (isListeningRef.current) {
-      isListeningRef.current = false;
-      setIsListening(false);
+    return () => {
+      isListeningIntentRef.current = false;
       try {
         recognition.stop();
-      } catch (e) {
-        console.error('Failed to stop recognition:', e);
-      }
-    } else {
-      isListeningRef.current = true;
+      } catch (e) {}
+    };
+  }, [language]);
+
+  const toggleListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+
+    if (isListeningIntentRef.current) {
+      isListeningIntentRef.current = false;
+      setIsListening(false);
+      isStartingRef.current = false;
       try {
-        recognition.start();
-        // setIsListening(true) will be handled by onstart
-      } catch (e) {
-        console.error('Failed to start recognition:', e);
-        // If start fails, reset intent
-        isListeningRef.current = false;
-        setIsListening(false);
+        recognitionRef.current.stop();
+      } catch (e) {}
+    } else {
+      isListeningIntentRef.current = true;
+      if (!isStartingRef.current) {
+        try {
+          isStartingRef.current = true;
+          recognitionRef.current.start();
+        } catch (e) {
+          console.error('[VoiceControl] Start failed:', e);
+          isListeningIntentRef.current = false;
+          isStartingRef.current = false;
+          setIsListening(false);
+          setError('Falha ao iniciar microfone. Tente novamente.');
+        }
       }
     }
-  }, [recognition]);
+  }, []);
 
   return { isListening, toggleListening, error };
 }
