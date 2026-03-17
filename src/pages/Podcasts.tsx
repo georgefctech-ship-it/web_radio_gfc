@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Compass, 
@@ -14,9 +14,20 @@ import {
   MoreVertical,
   Radio,
   Menu,
-  X
+  X,
+  Newspaper,
+  Edit2,
+  Instagram,
+  Twitter,
+  Youtube,
+  Facebook,
+  Linkedin,
+  Music2,
+  AtSign,
+  Ticket
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '../lib/supabase';
 
 const PODCASTS = [
   {
@@ -60,6 +71,13 @@ const PODCASTS = [
 export default function Podcasts() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAdmin(!!session);
+    });
+  }, []);
 
   return (
     <div className="bg-[#0b0e14] text-gray-100 font-display min-h-screen flex flex-col overflow-x-hidden">
@@ -91,6 +109,12 @@ export default function Podcasts() {
                 </Link>
                 <Link to="/podcasts" className="flex items-center gap-3 text-blue-500 py-2">
                   <Mic2 className="size-5" /> Podcasts
+                </Link>
+                <Link to="/news" className="flex items-center gap-3 text-gray-400 hover:text-white py-2">
+                  <Newspaper className="size-5" /> Notícias
+                </Link>
+                <Link to="/guiche-web" className="flex items-center gap-3 text-gray-400 hover:text-white py-2">
+                  <Ticket className="size-5" /> Guichê Web
                 </Link>
                 <Link to="/" className="flex items-center gap-3 text-gray-400 hover:text-white py-2">
                   <Heart className="size-5" /> Favoritos
@@ -133,6 +157,12 @@ export default function Podcasts() {
                 <Link to="/podcasts" className="text-blue-500 font-medium flex items-center gap-2">
                   <Mic2 className="size-5" /> Podcasts
                 </Link>
+                <Link to="/news" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+                  <Newspaper className="size-5" /> Notícias
+                </Link>
+                <Link to="/guiche-web" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
+                  <Ticket className="size-5" /> Guichê Web
+                </Link>
                 <Link to="/" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
                   <Globe className="size-5" /> Mapa
                 </Link>
@@ -144,6 +174,11 @@ export default function Podcasts() {
                 <Menu className="size-6" />
               </button>
               <div className="h-8 w-[1px] bg-white/10 hidden lg:block"></div>
+              {isAdmin && (
+                <Link to="/news" className="bg-primary/20 text-primary px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/30 transition-all flex items-center gap-2">
+                  <Edit2 className="size-3" /> Gerenciar Notícias
+                </Link>
+              )}
               <Link to="/admin" className="w-9 h-9 rounded-full border border-white/20 overflow-hidden">
                 <img 
                   alt="Perfil" 
@@ -265,7 +300,16 @@ export default function Podcasts() {
       {/* Footer Player Placeholder */}
       <div className="h-24"></div>
 
-      <footer className="py-10 border-t border-white/5 text-center">
+      <footer className="py-10 border-t border-white/5 text-center space-y-6">
+        <div className="flex items-center justify-center gap-6">
+          <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Instagram className="size-5" /></a>
+          <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Music2 className="size-5" /></a>
+          <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Twitter className="size-5" /></a>
+          <a href="https://threads.net" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><AtSign className="size-5" /></a>
+          <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Youtube className="size-5" /></a>
+          <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Facebook className="size-5" /></a>
+          <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Linkedin className="size-5" /></a>
+        </div>
         <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 Radio GeorgeFctech - Todos os direitos reservados</p>
       </footer>
     </div>

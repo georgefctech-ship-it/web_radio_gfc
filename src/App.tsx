@@ -6,6 +6,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import StationDetails from './pages/StationDetails';
 import Podcasts from './pages/Podcasts';
 import News from './pages/News';
+import GuicheWeb from './pages/GuicheWeb';
 import Support from './pages/Support';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/admin/dashboard" element={<AdminDashboard />} />
       <Route path="/podcasts" element={<Podcasts />} />
       <Route path="/news" element={<News />} />
+      <Route path="/guiche-web" element={<GuicheWeb />} />
       <Route path="/support" element={<Support />} />
     </Routes>
   );

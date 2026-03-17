@@ -49,6 +49,7 @@ import {
   AtSign,
   Twitter,
   Music2,
+  Newspaper
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -1275,9 +1276,9 @@ export default function RadioPlayer() {
               >
                 CHAT
               </button>
-              <button className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">BIBLIOTECA</button>
+              <Link to="/guiche-web" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">GUICHÉ WEB</Link>
               <Link to="/podcasts" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">PODCAST</Link>
-              <Link to="/news" target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
+              <Link to="/news" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
             </nav>
 
             {/* Live Stream Indicator */}
@@ -1474,13 +1475,13 @@ export default function RadioPlayer() {
 
           {/* Social Media Icons - Centered */}
           <div className="flex items-center gap-4 px-4 border-x border-white/5 h-8">
-            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Instagram className="size-4" /></a>
-            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Music2 className="size-4" /></a>
-            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Twitter className="size-4" /></a>
-            <a href="#" className="text-gray-500 hover:text-white transition-colors"><AtSign className="size-4" /></a>
-            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Youtube className="size-4" /></a>
-            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Facebook className="size-4" /></a>
-            <a href="#" className="text-gray-500 hover:text-white transition-colors"><Linkedin className="size-4" /></a>
+            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Instagram className="size-4" /></a>
+            <a href="https://spotify.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Music2 className="size-4" /></a>
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Twitter className="size-4" /></a>
+            <a href="https://threads.net" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><AtSign className="size-4" /></a>
+            <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Youtube className="size-4" /></a>
+            <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Facebook className="size-4" /></a>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Linkedin className="size-4" /></a>
           </div>
 
           <div className="whitespace-nowrap ml-4">© 2026 {branding.name} - Todos os direitos reservados</div>
@@ -1535,6 +1536,20 @@ export default function RadioPlayer() {
                 </div>
 
                 <div className="space-y-8">
+                  <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-white mb-4">Outros Controles</h3>
+                    <Link 
+                      to="/news" 
+                      className="flex items-center justify-between p-4 bg-primary/10 rounded-2xl border border-primary/20 hover:bg-primary/20 transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Newspaper className="size-5 text-primary" />
+                        <span className="text-xs font-black uppercase tracking-widest">Gerenciar Notícias</span>
+                      </div>
+                      <ChevronRight className="size-4 text-primary group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  </div>
+
                   <h3 className="text-sm font-black uppercase tracking-widest text-gray-500">Cadastradas</h3>
                   <div className="space-y-4">
                     {managedStations.map(s => (
