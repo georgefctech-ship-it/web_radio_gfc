@@ -86,6 +86,8 @@ async function startServer() {
       liveBroadcasterId = socket.id;
       io.emit("live:status", { isLive, broadcasterId: liveBroadcasterId });
       console.log("Live started by:", socket.id);
+      // Notify all listeners to request stream
+      socket.broadcast.emit("webrtc:broadcast-ready");
     });
 
     socket.on("live:stop", () => {
@@ -101,11 +103,14 @@ async function startServer() {
       // If no broadcaster is set, the one starting the vignette becomes the broadcaster
       if (!liveBroadcasterId) {
         liveBroadcasterId = socket.id;
+        io.emit("live:status", { isLive, broadcasterId: liveBroadcasterId });
       }
       
       if (socket.id === liveBroadcasterId) {
         console.log("[Socket] Vignette START event received from broadcaster", socket.id, data?.url);
         io.emit("vignette:start", data);
+        // Notify all listeners to request stream if they haven't
+        socket.broadcast.emit("webrtc:broadcast-ready");
       }
     });
 

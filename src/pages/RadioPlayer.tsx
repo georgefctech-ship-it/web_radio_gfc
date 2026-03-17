@@ -549,6 +549,11 @@ export default function RadioPlayer() {
       });
     });
 
+    socket.on('webrtc:broadcast-ready', () => {
+      console.log("[Player] Broadcast is ready, requesting stream...");
+      socket.emit('webrtc:request-stream');
+    });
+
     socket.on('webrtc:ice-candidate', async ({ candidate }) => {
       if (peerConnection.current) {
         await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
@@ -583,6 +588,7 @@ export default function RadioPlayer() {
       socket.off('vignette:end');
       socket.off('webrtc:offer');
       socket.off('webrtc:ice-candidate');
+      socket.off('webrtc:broadcast-ready');
       clearInterval(latencyInterval);
     };
   }, []);

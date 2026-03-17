@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2, Zap } from 'lucide-react';
+import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2, Zap, RefreshCw } from 'lucide-react';
 import { socket } from '../lib/socket';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAudioMixer } from '../hooks/useAudioMixer';
@@ -49,6 +49,8 @@ export const LiveStudio: React.FC = () => {
   const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('Diga com voz empolgada: Rádio George F C Tech, a sua rádio na web!');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<{ id: string, time: string, event: string, type: 'info' | 'success' | 'warning' | 'error' }[]>([]);
+  const [peerStats, setPeerStats] = useState<Record<string, { latency: number, status: string }>>({});
 
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
 
@@ -114,6 +116,21 @@ export const LiveStudio: React.FC = () => {
     isVignettePlayingRef.current = isVignettePlaying;
   }, [isVignettePlaying]);
 
+  const addHistoryEvent = (event: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    setSessionHistory(prev => [
+      { id: Math.random().toString(36).substr(2, 9), time: new Date().toLocaleTimeString(), event, type },
+      ...prev.slice(0, 49)
+    ]);
+  };
+
+  const forceReconnect = () => {
+    console.log("[Studio] Forçando reconexão de todos os ouvintes...");
+    socket.emit('live:start'); // Re-trigger live start to notify everyone
+    addHistoryEvent("Comando de reconexão forçada enviado", "warning");
+    setStatusMessage({ type: 'success', text: 'Sinal de reconexão enviado para todos os ouvintes' });
+    setTimeout(() => setStatusMessage(null), 3000);
+  };
+
   useEffect(() => {
     const onStreamRequest = async ({ listenerId }: { listenerId: string }) => {
       // Allow stream if on air OR if a vignette is playing
@@ -129,6 +146,7 @@ export const LiveStudio: React.FC = () => {
       }
 
       console.log(`[Studio] Enviando stream para ouvinte ${listenerId}. Tracks:`, stream.getTracks().length);
+      addHistoryEvent(`Novo ouvinte solicitando conexão: ${listenerId.slice(0, 6)}...`, "info");
       
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -137,6 +155,25 @@ export const LiveStudio: React.FC = () => {
       peerConnections.current[listenerId] = pc;
 
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[WebRTC] Peer ${listenerId} state: ${pc.iceConnectionState}`);
+        setPeerStats(prev => ({
+          ...prev,
+          [listenerId]: { ...prev[listenerId], status: pc.iceConnectionState }
+        }));
+        if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
+          delete peerConnections.current[listenerId];
+          setPeerStats(prev => {
+            const next = { ...prev };
+            delete next[listenerId];
+            return next;
+          });
+          addHistoryEvent(`Ouvinte desconectado: ${listenerId.slice(0, 6)}...`, "warning");
+        } else if (pc.iceConnectionState === 'connected') {
+          addHistoryEvent(`Ouvinte conectado com sucesso: ${listenerId.slice(0, 6)}...`, "success");
+        }
+      };
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
@@ -219,36 +256,45 @@ export const LiveStudio: React.FC = () => {
     
     // Latency monitoring
     const latencyInterval = setInterval(async () => {
-      const connections = Object.values(peerConnections.current);
+      const connections = Object.entries(peerConnections.current);
       if (connections.length === 0) {
         setLatency(null);
+        setPeerStats({});
         return;
       }
 
       try {
         let totalRtt = 0;
         let count = 0;
+        const newPeerStats: Record<string, { latency: number, status: string }> = {};
         
-        for (const pc of connections) {
+        for (const [id, pc] of connections) {
           const stats = await pc.getStats();
+          let peerLatency = 0;
           stats.forEach(report => {
             if (report.type === 'remote-candidate' && report.roundTripTime) {
+              const rtt = Math.round(report.roundTripTime * 1000);
               totalRtt += report.roundTripTime;
+              peerLatency = rtt;
               count++;
             } else if (report.type === 'candidate-pair' && report.currentRoundTripTime) {
+              const rtt = Math.round(report.currentRoundTripTime * 1000);
               totalRtt += report.currentRoundTripTime;
+              peerLatency = rtt;
               count++;
             }
           });
+          newPeerStats[id] = { latency: peerLatency, status: pc.iceConnectionState };
         }
 
+        setPeerStats(newPeerStats);
         if (count > 0) {
           setLatency(Math.round((totalRtt / count) * 1000));
         }
       } catch (err) {
         console.warn("[Studio] Error getting stats:", err);
       }
-    }, 5000);
+    }, 3000);
     
     return () => {
       socket.off('connect', onConnect);
@@ -256,6 +302,20 @@ export const LiveStudio: React.FC = () => {
       clearInterval(latencyInterval);
     };
   }, []);
+
+  useEffect(() => {
+    if (isOnAir) {
+      addHistoryEvent("Transmissão AO VIVO iniciada", "success");
+    } else {
+      addHistoryEvent("Transmissão AO VIVO encerrada", "info");
+    }
+  }, [isOnAir]);
+
+  useEffect(() => {
+    if (isVignettePlaying) {
+      addHistoryEvent("Executando vinheta", "info");
+    }
+  }, [isVignettePlaying]);
 
   const handleToggleOnAir = async () => {
     if (!isOnAir) {
@@ -841,9 +901,57 @@ export const LiveStudio: React.FC = () => {
 
           <div className="bg-white/5 rounded-[40px] border border-white/10 p-8 flex-1">
             <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Histórico de Sessão</h2>
-            <div className="space-y-4">
-              <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center py-12">
-                Nenhuma atividade registrada nesta sessão.
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {sessionHistory.length === 0 ? (
+                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center py-12">
+                  Nenhuma atividade registrada nesta sessão.
+                </div>
+              ) : (
+                sessionHistory.map(item => (
+                  <div key={item.id} className="flex flex-col gap-1 p-3 bg-white/5 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[8px] font-mono text-gray-500">{item.time}</span>
+                      <div className={`size-1.5 rounded-full ${
+                        item.type === 'success' ? 'bg-emerald-500' :
+                        item.type === 'error' ? 'bg-red-500' :
+                        item.type === 'warning' ? 'bg-amber-500' : 'bg-primary'
+                      }`} />
+                    </div>
+                    <p className="text-[10px] font-bold text-gray-300 uppercase leading-tight">{item.event}</p>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="mt-8 pt-8 border-t border-white/10">
+              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Monitor de Transmissão</h2>
+              <div className="space-y-3">
+                {Object.entries(peerStats).length === 0 ? (
+                  <p className="text-[10px] text-gray-600 font-bold uppercase text-center py-4">Sem conexões ativas</p>
+                ) : (
+                  Object.entries(peerStats).map(([id, stats]) => (
+                    <div key={id} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-mono text-gray-400">ID: {id.slice(0, 8)}</span>
+                        <span className={`text-[8px] font-black uppercase ${
+                          stats.status === 'connected' ? 'text-emerald-500' : 'text-amber-500'
+                        }`}>{stats.status}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-mono text-primary font-bold">{stats.latency}ms</span>
+                        <p className="text-[8px] text-gray-600 font-black uppercase">Latência</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+                
+                <button 
+                  onClick={forceReconnect}
+                  className="w-full mt-4 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="size-3" />
+                  Forçar Reconexão Geral
+                </button>
               </div>
             </div>
           </div>
