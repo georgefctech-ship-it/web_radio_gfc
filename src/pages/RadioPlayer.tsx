@@ -790,6 +790,17 @@ export default function RadioPlayer() {
           
           {/* Header Section with Highlight Border (as seen in screenshot) */}
           <div className="relative z-10 flex flex-col items-center mb-6 sm:mb-10 p-4 rounded-3xl border-2 border-indigo-400/30 bg-white/5 backdrop-blur-md shadow-2xl">
+            {isLive && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="absolute -top-3 left-1/2 -translate-x-1/2 bg-red-500 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-red-500/40 z-20"
+              >
+                <span className="size-1.5 bg-white rounded-full animate-pulse" />
+                <Mic className="size-3" />
+                Locução ao Vivo
+              </motion.div>
+            )}
             <div className="w-full flex items-center justify-between mb-4">
               <button 
                 onClick={() => {

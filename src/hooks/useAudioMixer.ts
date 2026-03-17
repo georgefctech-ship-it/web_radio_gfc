@@ -46,6 +46,10 @@ export const useAudioMixer = () => {
     analyser.connect(dest);
     analyser.connect(ctx.destination); // Monitor locally
 
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+
     setIsInitialized(true);
   }, [masterVolume]);
 

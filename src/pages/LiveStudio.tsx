@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2 } from 'lucide-react';
-import { io, Socket } from 'socket.io-client';
+import { socket } from '../lib/socket';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAudioMixer } from '../hooks/useAudioMixer';
 import { VUMeter } from '../components/VUMeter';
@@ -29,16 +29,18 @@ export const LiveStudio: React.FC = () => {
 
   const [isOnAir, setIsOnAir] = useState(false);
   const [listeners, setListeners] = useState(0);
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [vignettes, setVignettes] = useState<Vignette[]>([]);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isVignetteFormOpen, setIsVignetteFormOpen] = useState(false);
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [vignetteToDelete, setVignetteToDelete] = useState<string | null>(null);
   const [editingVignette, setEditingVignette] = useState<Vignette | null>(null);
   const [vignetteForm, setVignetteForm] = useState({ name: '', url: '' });
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('Diga com voz empolgada: Rádio George F C Tech, a sua rádio na web!');
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
 
@@ -72,14 +74,31 @@ export const LiveStudio: React.FC = () => {
 
   // Socket and WebRTC Setup
   useEffect(() => {
-    const newSocket = io();
-    setSocket(newSocket);
-
-    newSocket.on('listeners:count', (count: number) => setListeners(count));
+    socket.on('listeners:count', (count: number) => setListeners(count));
     
     // WebRTC Signaling for listeners
-    newSocket.on('webrtc:request-stream', async ({ listenerId }) => {
-      if (!isOnAir) return;
+    const handleStreamRequest = async ({ listenerId }: { listenerId: string }) => {
+      // Use a ref for isOnAir to avoid dependency cycle if needed, 
+      // but here we can just check the current state if we use a stable listener
+      // Actually, we need the latest isOnAir. We can use a ref for it.
+    };
+
+    // We'll use a more stable way to handle signaling
+    return () => {
+      // Don't close the shared socket
+      socket.off('listeners:count');
+    };
+  }, []);
+
+  // Ref for isOnAir to be used in socket listeners without re-binding
+  const isOnAirRef = useRef(isOnAir);
+  useEffect(() => {
+    isOnAirRef.current = isOnAir;
+  }, [isOnAir]);
+
+  useEffect(() => {
+    const onStreamRequest = async ({ listenerId }: { listenerId: string }) => {
+      if (!isOnAirRef.current) return;
       
       const stream = getMixedStream();
       if (!stream) {
@@ -99,49 +118,73 @@ export const LiveStudio: React.FC = () => {
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          newSocket.emit('webrtc:ice-candidate', {
+          socket.emit('webrtc:ice-candidate', {
             targetId: listenerId,
             candidate: event.candidate
           });
         }
       };
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
 
-      newSocket.emit('webrtc:offer', {
-        targetId: listenerId,
-        offer
-      });
-    });
+        socket.emit('webrtc:offer', {
+          targetId: listenerId,
+          offer
+        });
+      } catch (err) {
+        console.error("[Studio] Erro ao criar oferta WebRTC:", err);
+      }
+    };
 
-    newSocket.on('webrtc:answer', async ({ fromId, answer }) => {
+    const onAnswer = async ({ fromId, answer }: { fromId: string, answer: RTCSessionDescriptionInit }) => {
       const pc = peerConnections.current[fromId];
       if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        } catch (err) {
+          console.error("[Studio] Erro ao definir descrição remota:", err);
+        }
       }
-    });
+    };
 
-    newSocket.on('webrtc:ice-candidate', async ({ fromId, candidate }) => {
+    const onIceCandidate = async ({ fromId, candidate }: { fromId: string, candidate: RTCIceCandidateInit }) => {
       const pc = peerConnections.current[fromId];
       if (pc) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error("[Studio] Erro ao adicionar ICE candidate:", err);
+        }
       }
-    });
+    };
+
+    socket.on('webrtc:request-stream', onStreamRequest);
+    socket.on('webrtc:answer', onAnswer);
+    socket.on('webrtc:ice-candidate', onIceCandidate);
 
     return () => {
-      newSocket.close();
-      Object.values(peerConnections.current).forEach(pc => pc.close());
+      socket.off('webrtc:request-stream', onStreamRequest);
+      socket.off('webrtc:answer', onAnswer);
+      socket.off('webrtc:ice-candidate', onIceCandidate);
     };
-  }, [isOnAir, getMixedStream]);
+  }, [getMixedStream]);
 
   const handleToggleOnAir = async () => {
     if (!isOnAir) {
-      await initialize();
-      socket?.emit('live:start');
-      setIsOnAir(true);
+      try {
+        await initialize();
+        socket.emit('live:start');
+        setIsOnAir(true);
+        setStatusMessage({ type: 'success', text: 'Você está no ar!' });
+        setTimeout(() => setStatusMessage(null), 3000);
+      } catch (err) {
+        console.error("[Studio] Erro ao iniciar transmissão:", err);
+        setStatusMessage({ type: 'error', text: 'Erro ao acessar microfone.' });
+      }
     } else {
-      socket?.emit('live:stop');
+      socket.emit('live:stop');
       setIsOnAir(false);
       Object.values(peerConnections.current).forEach(pc => pc.close());
       peerConnections.current = {};
@@ -175,12 +218,22 @@ export const LiveStudio: React.FC = () => {
   };
 
   const handleDeleteVignette = async (id: string) => {
-    if (confirm('Deseja excluir esta vinheta?')) {
-      const success = await vignetteService.delete(id);
-      if (success) {
-        setVignettes(vignettes.filter(v => v.id !== id));
-      }
+    setVignetteToDelete(id);
+    setIsConfirmDeleteOpen(true);
+  };
+
+  const confirmDeleteVignette = async () => {
+    if (!vignetteToDelete) return;
+    const success = await vignetteService.delete(vignetteToDelete);
+    if (success) {
+      setVignettes(vignettes.filter(v => v.id !== vignetteToDelete));
+      setStatusMessage({ type: 'success', text: 'Vinheta excluída!' });
+    } else {
+      setStatusMessage({ type: 'error', text: 'Erro ao excluir vinheta.' });
     }
+    setIsConfirmDeleteOpen(false);
+    setVignetteToDelete(null);
+    setTimeout(() => setStatusMessage(null), 3000);
   };
 
   const handleGenerateAiVignette = async () => {
@@ -247,6 +300,22 @@ export const LiveStudio: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] text-white p-4 sm:p-8 font-sans">
+      {/* Status Messages */}
+      <AnimatePresence>
+        {statusMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs shadow-2xl ${
+              statusMessage.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+            }`}
+          >
+            {statusMessage.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <header className="flex items-center justify-between mb-12">
         <div className="flex items-center gap-4">
           <button 
@@ -579,6 +648,44 @@ export const LiveStudio: React.FC = () => {
                   Salvar Vinheta
                 </button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm Delete Modal */}
+      <AnimatePresence>
+        {isConfirmDeleteOpen && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setIsConfirmDeleteOpen(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-sm bg-[#0a0a0a] border border-white/10 rounded-[32px] p-8 shadow-2xl"
+            >
+              <h3 className="text-xl font-black uppercase tracking-tighter mb-4">Excluir Vinheta?</h3>
+              <p className="text-gray-400 text-sm mb-8">Esta ação não pode ser desfeita.</p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setIsConfirmDeleteOpen(false)}
+                  className="flex-1 py-4 bg-white/5 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-white/10 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={confirmDeleteVignette}
+                  className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+                >
+                  Excluir
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
