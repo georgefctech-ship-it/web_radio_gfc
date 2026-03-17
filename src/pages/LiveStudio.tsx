@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2 } from 'lucide-react';
+import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2 } from 'lucide-react';
 import { socket } from '../lib/socket';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAudioMixer } from '../hooks/useAudioMixer';
@@ -21,6 +21,9 @@ export const LiveStudio: React.FC = () => {
     updateMicVolume,
     masterVolume,
     updateMasterVolume,
+    vignetteVolume,
+    updateVignetteVolume,
+    stopAllVignettes,
     playVignette,
     getMixedStream,
     getAnalyser,
@@ -30,6 +33,7 @@ export const LiveStudio: React.FC = () => {
 
   const [isOnAir, setIsOnAir] = useState(false);
   const [listeners, setListeners] = useState(0);
+  const [latency, setLatency] = useState<number | null>(null);
   const [vignettes, setVignettes] = useState<Vignette[]>([]);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isVignetteFormOpen, setIsVignetteFormOpen] = useState(false);
@@ -175,6 +179,60 @@ export const LiveStudio: React.FC = () => {
       socket.off('webrtc:ice-candidate', onIceCandidate);
     };
   }, [getMixedStream]);
+
+  useEffect(() => {
+    console.log("[Studio] Socket status:", socket.connected ? "Connected" : "Disconnected");
+    const onConnect = () => {
+      console.log("[Studio] Socket connected");
+      if (isOnAirRef.current) {
+        console.log("[Studio] Re-emitting live:start after reconnection");
+        socket.emit('live:start');
+      }
+    };
+    const onDisconnect = () => console.log("[Studio] Socket disconnected");
+    
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    
+    // Latency monitoring
+    const latencyInterval = setInterval(async () => {
+      const connections = Object.values(peerConnections.current);
+      if (connections.length === 0) {
+        setLatency(null);
+        return;
+      }
+
+      try {
+        let totalRtt = 0;
+        let count = 0;
+        
+        for (const pc of connections) {
+          const stats = await pc.getStats();
+          stats.forEach(report => {
+            if (report.type === 'remote-candidate' && report.roundTripTime) {
+              totalRtt += report.roundTripTime;
+              count++;
+            } else if (report.type === 'candidate-pair' && report.currentRoundTripTime) {
+              totalRtt += report.currentRoundTripTime;
+              count++;
+            }
+          });
+        }
+
+        if (count > 0) {
+          setLatency(Math.round((totalRtt / count) * 1000));
+        }
+      } catch (err) {
+        console.warn("[Studio] Error getting stats:", err);
+      }
+    }, 5000);
+    
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      clearInterval(latencyInterval);
+    };
+  }, []);
 
   const handleToggleOnAir = async () => {
     if (!isOnAir) {
@@ -457,7 +515,6 @@ export const LiveStudio: React.FC = () => {
                       value={micVolume}
                       onChange={(e) => updateMicVolume(parseFloat(e.target.value))}
                       className="h-full appearance-none bg-white/10 w-2 rounded-full cursor-pointer accent-primary vertical-range"
-                      style={{ writingMode: 'bt-lr' } as any}
                     />
                     <span className="text-[10px] font-mono text-gray-500">{Math.round(micVolume * 100)}%</span>
                   </div>
@@ -490,6 +547,43 @@ export const LiveStudio: React.FC = () => {
                     <span className="text-[10px] font-mono text-gray-500">{Math.round(masterVolume * 100)}%</span>
                   </div>
                 </div>
+
+                {/* Vignette Channel */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Canal 02</span>
+                      <span className="text-[12px] font-black uppercase text-white">Vinhetas</span>
+                    </div>
+                    <button 
+                      onClick={stopAllVignettes}
+                      disabled={!isVignettePlaying}
+                      className={`size-12 rounded-2xl flex items-center justify-center transition-all ${
+                        isVignettePlaying 
+                          ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                          : 'bg-white/5 text-gray-500 opacity-50'
+                      }`}
+                      title="Parar todas as vinhetas"
+                    >
+                      <Square className="size-5 fill-current" />
+                    </button>
+                  </div>
+                  <div className="h-64 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5 relative">
+                    <div className="absolute -right-8 top-1/2 -translate-y-1/2 rotate-90 text-[8px] font-black uppercase tracking-[0.3em] text-gray-600">
+                      Volume Vinheta
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1.5" 
+                      step="0.01"
+                      value={vignetteVolume}
+                      onChange={(e) => updateVignetteVolume(parseFloat(e.target.value))}
+                      className="h-full appearance-none bg-white/10 w-2 rounded-full cursor-pointer accent-primary vertical-range"
+                    />
+                    <span className="text-[10px] font-mono text-gray-500">{Math.round(vignetteVolume * 100)}%</span>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -501,6 +595,16 @@ export const LiveStudio: React.FC = () => {
                 <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Quick Play (Vinhetas)</h2>
                 <p className="text-[10px] text-gray-600 font-bold uppercase">Gerencie e toque seus áudios</p>
               </div>
+              {isVignettePlaying && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-primary text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest animate-pulse flex items-center gap-2"
+                >
+                  <Music2 className="size-3" />
+                  Vinheta no Ar
+                </motion.div>
+              )}
               <div className="flex gap-2">
                 <button 
                   onClick={() => setIsManageModalOpen(true)}
@@ -585,11 +689,17 @@ export const LiveStudio: React.FC = () => {
             <div className="space-y-4">
               <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-white/5">
                 <span className="text-[10px] font-bold text-gray-400">LATÊNCIA</span>
-                <span className="text-xs font-mono text-emerald-500">~24ms</span>
+                <span className={`text-xs font-mono ${latency && latency < 100 ? 'text-emerald-500' : latency && latency < 300 ? 'text-yellow-500' : 'text-red-500'}`}>
+                  {latency ? `~${latency}ms` : '---'}
+                </span>
               </div>
               <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-white/5">
                 <span className="text-[10px] font-bold text-gray-400">BITRATE</span>
                 <span className="text-xs font-mono text-emerald-500">128kbps</span>
+              </div>
+              <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-white/5">
+                <span className="text-[10px] font-bold text-gray-400">CONEXÕES</span>
+                <span className="text-xs font-mono text-primary">{Object.keys(peerConnections.current).length}</span>
               </div>
               <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-white/5">
                 <span className="text-[10px] font-bold text-gray-400">FORMATO</span>

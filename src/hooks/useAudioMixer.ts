@@ -21,6 +21,8 @@ export const useAudioMixer = () => {
   const [masterVolume, setMasterVolume] = useState(1);
   const [isMicActive, setIsMicActive] = useState(false);
   const [isVignettePlaying, setIsVignettePlaying] = useState(false);
+  const [vignetteVolume, setVignetteVolume] = useState(1);
+  const activeVignettesRef = useRef<Map<string, { source: AudioBufferSourceNode, gain: GainNode }>>(new Map());
 
   const initialize = useCallback(async () => {
     if (audioContextRef.current) return;
@@ -109,6 +111,26 @@ export const useAudioMixer = () => {
     }
   }, []);
 
+  const updateVignetteVolume = useCallback((val: number) => {
+    setVignetteVolume(val);
+    activeVignettesRef.current.forEach(({ gain }) => {
+      gain.gain.setTargetAtTime(val, audioContextRef.current!.currentTime, 0.05);
+    });
+  }, []);
+
+  const stopAllVignettes = useCallback(() => {
+    activeVignettesRef.current.forEach(({ source }) => {
+      try {
+        source.stop();
+      } catch (e) {
+        // Source might already be stopped
+      }
+    });
+    activeVignettesRef.current.clear();
+    setIsVignettePlaying(false);
+    socket.emit('vignette:end');
+  }, []);
+
   const playVignette = useCallback(async (url: string) => {
     if (!audioContextRef.current) await initialize();
     const ctx = audioContextRef.current!;
@@ -185,11 +207,14 @@ export const useAudioMixer = () => {
       source.buffer = audioBuffer;
 
       const gain = ctx.createGain();
-      gain.gain.value = 1.0; // Vignette volume
+      gain.gain.value = vignetteVolume;
 
       source.connect(gain);
       gain.connect(masterGainRef.current!);
       
+      const vignetteId = Math.random().toString(36).substring(7);
+      activeVignettesRef.current.set(vignetteId, { source, gain });
+
       console.log("[AudioMixer] Emitting vignette:start");
       socket.emit('vignette:start');
       setIsVignettePlaying(true);
@@ -197,9 +222,12 @@ export const useAudioMixer = () => {
       
       // Cleanup
       source.onended = () => {
-        console.log("[AudioMixer] Emitting vignette:end");
-        socket.emit('vignette:end');
-        setIsVignettePlaying(false);
+        activeVignettesRef.current.delete(vignetteId);
+        if (activeVignettesRef.current.size === 0) {
+          console.log("[AudioMixer] Emitting vignette:end");
+          socket.emit('vignette:end');
+          setIsVignettePlaying(false);
+        }
         source.disconnect();
         gain.disconnect();
       };
@@ -226,6 +254,9 @@ export const useAudioMixer = () => {
     updateMicVolume,
     masterVolume,
     updateMasterVolume,
+    vignetteVolume,
+    updateVignetteVolume,
+    stopAllVignettes,
     playVignette,
     getMixedStream,
     getAnalyser,

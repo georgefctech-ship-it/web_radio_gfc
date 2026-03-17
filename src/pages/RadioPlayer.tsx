@@ -61,6 +61,23 @@ import { useVoiceControl } from '../hooks/useVoiceControl';
 const LIBRARIES: ("places")[] = ["places"];
 
 export default function RadioPlayer() {
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+
+  useEffect(() => {
+    const onConnect = () => setSocketStatus('connected');
+    const onDisconnect = () => setSocketStatus('disconnected');
+    
+    if (socket.connected) setSocketStatus('connected');
+    
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
+  }, []);
+
   // Global Player State
   const { 
     currentStation, 
@@ -72,6 +89,7 @@ export default function RadioPlayer() {
     isMuted, 
     setIsMuted, 
     setIsDucked,
+    isVignetteMuted,
     setIsVignetteMuted,
     audioLevel,
     audioRef
@@ -109,6 +127,8 @@ export default function RadioPlayer() {
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [isVignettePlaying, setIsVignettePlaying] = useState(false);
+  const [latency, setLatency] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
@@ -457,10 +477,14 @@ export default function RadioPlayer() {
       setIsLive(liveStatus);
       if (!liveStatus) {
         setLiveStream(null);
+        setLatency(null);
         peerConnection.current?.close();
         peerConnection.current = null;
       }
     });
+
+    socket.on('vignette:start', () => setIsVignettePlaying(true));
+    socket.on('vignette:end', () => setIsVignettePlaying(false));
 
     socket.on('webrtc:offer', async ({ fromId, offer }) => {
       console.log(`[Player] Recebida oferta WebRTC de ${fromId}`);
@@ -501,11 +525,35 @@ export default function RadioPlayer() {
       }
     });
 
+    // Latency monitoring
+    const latencyInterval = setInterval(async () => {
+      if (!peerConnection.current) {
+        setLatency(null);
+        return;
+      }
+
+      try {
+        const stats = await peerConnection.current.getStats();
+        stats.forEach(report => {
+          if (report.type === 'remote-candidate' && report.roundTripTime) {
+            setLatency(Math.round(report.roundTripTime * 1000));
+          } else if (report.type === 'candidate-pair' && report.currentRoundTripTime) {
+            setLatency(Math.round(report.currentRoundTripTime * 1000));
+          }
+        });
+      } catch (err) {
+        console.warn("[Player] Error getting stats:", err);
+      }
+    }, 5000);
+
     return () => {
       socket.off('listeners:count');
       socket.off('live:status');
+      socket.off('vignette:start');
+      socket.off('vignette:end');
       socket.off('webrtc:offer');
       socket.off('webrtc:ice-candidate');
+      clearInterval(latencyInterval);
     };
   }, []);
 
@@ -1084,6 +1132,33 @@ export default function RadioPlayer() {
                 <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">LIVE</span>
               </div>
             )}
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+                <Users className="size-3 text-primary" />
+                <span className="text-[10px] font-black">{onlineListeners}</span>
+              </div>
+              
+              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+                <div className={`size-1.5 rounded-full ${
+                  socketStatus === 'connected' ? 'bg-emerald-500' : 
+                  socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
+                  'bg-red-500'
+                }`} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  {socketStatus === 'connected' ? 'Online' : 
+                   socketStatus === 'connecting' ? 'Conectando' : 
+                   'Offline'}
+                </span>
+              </div>
+
+              {latency && (
+                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+                  <Activity className="size-3 text-emerald-500" />
+                  <span className="text-[10px] font-black">{latency}ms</span>
+                </div>
+              )}
+            </div>
             
             <nav className="hidden md:flex items-center gap-6">
               <button 
@@ -1109,7 +1184,28 @@ export default function RadioPlayer() {
               <Link to="/news" target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
             </nav>
 
-            {/* Mobile Tab Switcher */}
+            {/* Live Stream Indicator */}
+          <AnimatePresence>
+            {(isLive || isVignettePlaying) && (
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="fixed bottom-32 left-1/2 -translate-x-1/2 z-40"
+              >
+                <div className={`px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md border ${
+                  isVignettePlaying 
+                    ? 'bg-primary/20 border-primary/30 text-primary' 
+                    : 'bg-red-500/20 border-red-500/30 text-red-500'
+                }`}>
+                  <div className={`size-2 rounded-full animate-pulse ${isVignettePlaying ? 'bg-primary' : 'bg-red-500'}`} />
+                  <span className="text-xs font-black uppercase tracking-widest">
+                    {isVignettePlaying ? 'Vinheta no Ar' : 'Estúdio ao Vivo'}
+                  </span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
             <div className="md:hidden flex items-center bg-white/5 rounded-full p-1 border border-white/10">
               <button 
                 onClick={() => setActiveTab('explore')}
