@@ -271,33 +271,41 @@ export const LiveStudio: React.FC = () => {
         let count = 0;
         const newPeerStats: Record<string, { latency: number, status: string }> = {};
         
-        for (const [id, pc] of connections) {
-          const stats = await pc.getStats();
-          let peerLatency = 0;
-          stats.forEach(report => {
-            if (report.type === 'remote-candidate' && report.roundTripTime) {
-              const rtt = Math.round(report.roundTripTime * 1000);
-              totalRtt += report.roundTripTime;
-              peerLatency = rtt;
-              count++;
-            } else if (report.type === 'candidate-pair' && report.currentRoundTripTime) {
-              const rtt = Math.round(report.currentRoundTripTime * 1000);
-              totalRtt += report.currentRoundTripTime;
-              peerLatency = rtt;
-              count++;
-            }
-          });
-          newPeerStats[id] = { latency: peerLatency, status: pc.iceConnectionState };
-        }
+        // Use Promise.all to fetch stats in parallel
+        const statsPromises = connections.map(async ([id, pc]) => {
+          try {
+            const stats = await pc.getStats();
+            let peerLatency = 0;
+            stats.forEach(report => {
+              if ((report.type === 'remote-candidate' || report.type === 'candidate-pair') && 
+                  (report.roundTripTime || report.currentRoundTripTime)) {
+                const rtt = report.roundTripTime || report.currentRoundTripTime;
+                peerLatency = Math.round(rtt * 1000);
+              }
+            });
+            return { id, latency: peerLatency, status: pc.iceConnectionState };
+          } catch (e) {
+            return { id, latency: 0, status: 'error' };
+          }
+        });
+
+        const results = await Promise.all(statsPromises);
+        results.forEach(res => {
+          newPeerStats[res.id] = { latency: res.latency, status: res.status };
+          if (res.latency > 0) {
+            totalRtt += res.latency;
+            count++;
+          }
+        });
 
         setPeerStats(newPeerStats);
         if (count > 0) {
-          setLatency(Math.round((totalRtt / count) * 1000));
+          setLatency(Math.round(totalRtt / count));
         }
       } catch (err) {
         console.warn("[Studio] Error getting stats:", err);
       }
-    }, 3000);
+    }, 5000);
     
     return () => {
       socket.off('connect', onConnect);

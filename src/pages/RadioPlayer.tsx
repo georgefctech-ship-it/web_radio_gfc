@@ -75,7 +75,7 @@ export default function RadioPlayer() {
     setIsDucked,
     isVignetteMuted,
     setIsVignetteMuted,
-    audioLevel,
+    analyser,
     audioRef
   } = usePlayer();
 

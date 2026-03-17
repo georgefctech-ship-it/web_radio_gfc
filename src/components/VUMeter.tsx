@@ -4,7 +4,7 @@ interface VUMeterProps {
   analyser: AnalyserNode | null;
 }
 
-export const VUMeter: React.FC<VUMeterProps> = ({ analyser }) => {
+export const VUMeter = React.memo(({ analyser }: VUMeterProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
 
@@ -20,7 +20,9 @@ export const VUMeter: React.FC<VUMeterProps> = ({ analyser }) => {
       animationRef.current = requestAnimationFrame(draw);
       analyser.getByteFrequencyData(dataArray);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const width = canvas.width;
+      const height = canvas.height;
+      ctx.clearRect(0, 0, width, height);
 
       // Calculate average volume
       let sum = 0;
@@ -28,31 +30,32 @@ export const VUMeter: React.FC<VUMeterProps> = ({ analyser }) => {
         sum += dataArray[i];
       }
       const average = sum / bufferLength;
-      const height = (average / 255) * canvas.height;
+      const barHeight = (average / 255) * height;
 
       // Draw background
       ctx.fillStyle = '#1a1a1a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, width, height);
 
       // Draw gradient bar
-      const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+      const gradient = ctx.createLinearGradient(0, height, 0, 0);
       gradient.addColorStop(0, '#10b981'); // Green
       gradient.addColorStop(0.6, '#f59e0b'); // Orange
       gradient.addColorStop(0.9, '#ef4444'); // Red
 
       ctx.fillStyle = gradient;
-      ctx.fillRect(0, canvas.height - height, canvas.width, height);
+      ctx.fillRect(0, height - barHeight, width, barHeight);
 
       // Draw peak line
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
       ctx.lineWidth = 1;
+      const step = height / 10;
+      ctx.beginPath();
       for (let i = 1; i < 10; i++) {
-        const y = (canvas.height / 10) * i;
-        ctx.beginPath();
+        const y = step * i;
         ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
+        ctx.lineTo(width, y);
       }
+      ctx.stroke();
     };
 
     draw();
@@ -67,4 +70,4 @@ export const VUMeter: React.FC<VUMeterProps> = ({ analyser }) => {
       <canvas ref={canvasRef} width={32} height={192} className="w-full h-full" />
     </div>
   );
-};
+});
