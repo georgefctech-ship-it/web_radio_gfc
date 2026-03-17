@@ -49,6 +49,9 @@ export const LiveStudio: React.FC = () => {
   const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('Diga com voz empolgada: Rádio George F C Tech, a sua rádio na web!');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [supabaseStatus, setSupabaseStatus] = useState<'connected' | 'error' | 'checking'>('checking');
+  const [serverStatus, setServerStatus] = useState<'online' | 'offline' | 'connecting'>('connecting');
+  const [serverLatency, setServerLatency] = useState<number | null>(null);
   const [sessionHistory, setSessionHistory] = useState<{ id: string, time: string, event: string, type: 'info' | 'success' | 'warning' | 'error' }[]>([]);
   const [peerStats, setPeerStats] = useState<Record<string, { latency: number, status: string }>>({});
 
@@ -348,6 +351,42 @@ export const LiveStudio: React.FC = () => {
       peerConnections.current = {};
     }
   };
+
+  useEffect(() => {
+    // Check Supabase
+    const checkSupabase = async () => {
+      try {
+        const { error } = await supabase.from('vignettes').select('id').limit(1);
+        setSupabaseStatus(error ? 'error' : 'connected');
+      } catch (e) {
+        setSupabaseStatus('error');
+      }
+    };
+    checkSupabase();
+
+    // Monitor Server Status & Latency
+    const serverMonitor = setInterval(() => {
+      const start = Date.now();
+      socket.emit('ping', (resp: any) => {
+        if (resp?.status === 'ok') {
+          setServerStatus('online');
+          setServerLatency(Date.now() - start);
+        }
+      });
+    }, 5000);
+
+    const onConnect = () => setServerStatus('online');
+    const onDisconnect = () => setServerStatus('offline');
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+
+    return () => {
+      clearInterval(serverMonitor);
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -899,28 +938,62 @@ export const LiveStudio: React.FC = () => {
             </ul>
           </div>
 
-          <div className="bg-white/5 rounded-[40px] border border-white/10 p-8 flex-1">
-            <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Histórico de Sessão</h2>
-            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-              {sessionHistory.length === 0 ? (
-                <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center py-12">
-                  Nenhuma atividade registrada nesta sessão.
+          <div className="bg-white/5 rounded-[40px] border border-white/10 p-8 flex-1 flex flex-col gap-8">
+            {/* Diagnósticos Section */}
+            <div className="bg-black/40 rounded-3xl p-6 border border-white/5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40">Diagnósticos do Sistema</h3>
+                <div className="flex items-center gap-2">
+                  <div className={`size-1.5 rounded-full ${serverStatus === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                  <span className="text-[8px] font-bold uppercase text-white/60">Servidor: {serverStatus}</span>
                 </div>
-              ) : (
-                sessionHistory.map(item => (
-                  <div key={item.id} className="flex flex-col gap-1 p-3 bg-white/5 rounded-2xl border border-white/5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-mono text-gray-500">{item.time}</span>
-                      <div className={`size-1.5 rounded-full ${
-                        item.type === 'success' ? 'bg-emerald-500' :
-                        item.type === 'error' ? 'bg-red-500' :
-                        item.type === 'warning' ? 'bg-amber-500' : 'bg-primary'
-                      }`} />
-                    </div>
-                    <p className="text-[10px] font-bold text-gray-300 uppercase leading-tight">{item.event}</p>
-                  </div>
-                ))
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                  <p className="text-[8px] font-bold text-white/40 uppercase mb-1">Latência Servidor</p>
+                  <p className="text-sm font-black text-primary">{serverLatency ? `${serverLatency}ms` : '--'}</p>
+                </div>
+                <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                  <p className="text-[8px] font-bold text-white/40 uppercase mb-1">Banco de Dados</p>
+                  <p className={`text-sm font-black ${supabaseStatus === 'connected' ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {supabaseStatus === 'connected' ? 'OK' : 'ERRO'}
+                  </p>
+                </div>
+              </div>
+
+              {supabaseStatus === 'error' && (
+                <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <p className="text-[8px] text-red-400 font-medium leading-relaxed">
+                    Aviso: Erro ao conectar com Supabase. Verifique se a tabela 'vignettes' existe.
+                  </p>
+                </div>
               )}
+            </div>
+
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Histórico de Sessão</h2>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {sessionHistory.length === 0 ? (
+                  <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center py-12">
+                    Nenhuma atividade registrada nesta sessão.
+                  </div>
+                ) : (
+                  sessionHistory.map(item => (
+                    <div key={item.id} className="flex flex-col gap-1 p-3 bg-white/5 rounded-2xl border border-white/5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-mono text-gray-500">{item.time}</span>
+                        <div className={`size-1.5 rounded-full ${
+                          item.type === 'success' ? 'bg-emerald-500' :
+                          item.type === 'error' ? 'bg-red-500' :
+                          item.type === 'warning' ? 'bg-amber-500' : 'bg-primary'
+                        }`} />
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-300 uppercase leading-tight">{item.event}</p>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
             
             <div className="mt-8 pt-8 border-t border-white/10">

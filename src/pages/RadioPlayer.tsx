@@ -40,6 +40,7 @@ import {
   Mic,
   MicOff,
   Navigation,
+  Info,
   Activity,
   Instagram,
   Youtube,
@@ -85,7 +86,10 @@ export default function RadioPlayer() {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<string[]>([]);
   const [onlineListeners, setOnlineListeners] = useState(0);
+  const [broadcasterId, setBroadcasterId] = useState<string | null>(null);
   const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+  const [socketError, setSocketError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
   const [isLiveAudioPlaying, setIsLiveAudioPlaying] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [vignetteUrl, setVignetteUrl] = useState<string | null>(null);
@@ -459,18 +463,23 @@ export default function RadioPlayer() {
     setSocketStatus(socket.connected ? 'connected' : 'connecting');
     
     socket.on('connect', () => {
-      console.log("[Player] Socket connected");
+      console.log("[Player] Socket conectado:", socket.id);
       setSocketStatus('connected');
+      setSocketError(null);
     });
     
-    socket.on('disconnect', () => {
-      console.log("[Player] Socket disconnected");
+    socket.on('disconnect', (reason) => {
+      console.warn("[Player] Socket desconectado:", reason);
       setSocketStatus('disconnected');
+      if (reason === 'io server disconnect') {
+        socket.connect();
+      }
     });
 
     socket.on('connect_error', (err) => {
-      console.error("[Player] Socket connection error:", err);
+      console.error("[Player] Erro na conexão do socket:", err);
       setSocketStatus('disconnected');
+      setSocketError(err.message);
     });
 
     socket.on('listeners:count', (count: number) => {
@@ -481,9 +490,10 @@ export default function RadioPlayer() {
     // Request initial count
     socket.emit('listeners:request');
     
-    socket.on('live:status', ({ isLive: liveStatus }) => {
+    socket.on('live:status', ({ isLive: liveStatus, broadcasterId: bId }) => {
       setIsLive(liveStatus);
-      if (!liveStatus) {
+      setBroadcasterId(bId);
+      if (!liveStatus && !isVignettePlaying) {
         setLiveStream(null);
         setLatency(null);
         peerConnection.current?.close();
@@ -1192,27 +1202,49 @@ export default function RadioPlayer() {
                 <span className="text-[10px] font-black">{onlineListeners}</span>
               </div>
               
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                <div className={`size-1.5 rounded-full ${
-                  socketStatus === 'connected' ? 'bg-emerald-500' : 
-                  socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
-                  'bg-red-500'
-                }`} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                  {socketStatus === 'connected' ? 'Online' : 
-                   socketStatus === 'connecting' ? 'Conectando' : 
-                   'Offline'}
-                </span>
-                {(socketStatus === 'disconnected' || socketStatus === 'connecting') && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+                  <div className={`size-1.5 rounded-full ${
+                    socketStatus === 'connected' ? 'bg-emerald-500' : 
+                    socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
+                    'bg-red-500'
+                  }`} />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    {socketStatus === 'connected' ? 'Online' : 
+                     socketStatus === 'connecting' ? 'Conectando' : 
+                     'Offline'}
+                  </span>
                   <button 
                     onClick={() => {
+                      setSocketStatus('connecting');
                       socket.disconnect().connect();
                     }}
                     className="ml-1 p-1 hover:bg-white/10 rounded-full transition-colors"
                     title="Reconectar"
                   >
-                    <Zap className="size-2 text-primary" />
+                    <Zap className={`size-2 ${socketStatus === 'connecting' ? 'animate-pulse text-yellow-500' : 'text-primary'}`} />
                   </button>
+                  <button
+                    onClick={() => setShowDebug(!showDebug)}
+                    className="ml-1 p-1 hover:bg-white/10 rounded-full transition-colors"
+                  >
+                    <Info className="size-2 text-white/40" />
+                  </button>
+                </div>
+                
+                {showDebug && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-black/60 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-[8px] font-mono space-y-1 max-w-[200px]"
+                  >
+                    <p className="text-white/60 uppercase font-black mb-1">Debug Info</p>
+                    <p><span className="text-primary">ID:</span> {socket.id || 'N/A'}</p>
+                    <p><span className="text-primary">Status:</span> {socketStatus}</p>
+                    {socketError && <p className="text-red-500"><span className="text-primary">Erro:</span> {socketError}</p>}
+                    <p><span className="text-primary">Transport:</span> {socket.io?.engine?.transport?.name || 'N/A'}</p>
+                    <p><span className="text-primary">Broadcaster:</span> {broadcasterId ? 'Ativo' : 'Inativo'}</p>
+                  </motion.div>
                 )}
               </div>
 

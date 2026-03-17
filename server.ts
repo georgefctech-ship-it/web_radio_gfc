@@ -31,7 +31,7 @@ async function startServer() {
   let liveBroadcasterId: string | null = null;
 
   io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
+    console.log(`[Socket] New connection: ${socket.id} (Total: ${io.engine.clientsCount})`);
     
     // Update listener count for everyone
     const currentCount = io.engine.clientsCount;
@@ -43,6 +43,10 @@ async function startServer() {
     // Send initial state
     socket.emit("chat:history", messages);
     socket.emit("live:status", { isLive, broadcasterId: liveBroadcasterId });
+
+    socket.on("ping", (cb) => {
+      if (typeof cb === 'function') cb({ status: 'ok', time: Date.now() });
+    });
     socket.emit("votes:initial", stationVotes);
 
     socket.on("listeners:request", () => {
