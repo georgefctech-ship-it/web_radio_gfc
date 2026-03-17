@@ -447,6 +447,10 @@ export default function RadioPlayer() {
 
     fetchInitialData();
 
+    console.log("[Player] Socket status:", socket.connected ? "Connected" : "Disconnected");
+    socket.on('connect', () => console.log("[Player] Socket connected"));
+    socket.on('disconnect', () => console.log("[Player] Socket disconnected"));
+
     socket.on('listeners:count', (count: number) => setOnlineListeners(count));
     
     socket.on('live:status', ({ isLive: liveStatus }) => {
@@ -496,26 +500,14 @@ export default function RadioPlayer() {
         await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
       }
     });
-    
-    socket.on('vignette:start', () => {
-      console.log("[Player] Vinheta iniciada no estúdio");
-      setIsVignetteMuted(true);
-    });
-
-    socket.on('vignette:end', () => {
-      console.log("[Player] Vinheta finalizada no estúdio");
-      setIsVignetteMuted(false);
-    });
 
     return () => {
       socket.off('listeners:count');
       socket.off('live:status');
       socket.off('webrtc:offer');
       socket.off('webrtc:ice-candidate');
-      socket.off('vignette:start');
-      socket.off('vignette:end');
     };
-  }, [setIsVignetteMuted]);
+  }, []);
 
   // Request stream when live starts
   useEffect(() => {
@@ -814,6 +806,17 @@ export default function RadioPlayer() {
                 <span className="size-1.5 bg-white rounded-full animate-pulse" />
                 <Mic className="size-3" />
                 Locução ao Vivo
+              </motion.div>
+            )}
+
+            {isVignetteMuted && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-indigo-500/40 z-20 whitespace-nowrap"
+              >
+                <Music2 className="size-2.5 animate-bounce" />
+                Vinheta Ativa
               </motion.div>
             )}
             <div className="w-full flex items-center justify-between mb-4">

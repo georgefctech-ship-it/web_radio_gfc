@@ -190,12 +190,14 @@ export const useAudioMixer = () => {
       source.connect(gain);
       gain.connect(masterGainRef.current!);
       
+      console.log("[AudioMixer] Emitting vignette:start");
       socket.emit('vignette:start');
       setIsVignettePlaying(true);
       source.start(0);
       
       // Cleanup
       source.onended = () => {
+        console.log("[AudioMixer] Emitting vignette:end");
         socket.emit('vignette:end');
         setIsVignettePlaying(false);
         source.disconnect();

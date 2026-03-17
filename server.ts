@@ -90,10 +90,12 @@ async function startServer() {
     });
 
     socket.on("vignette:start", () => {
+      console.log("[Socket] Vignette START event received from", socket.id);
       io.emit("vignette:start");
     });
 
     socket.on("vignette:end", () => {
+      console.log("[Socket] Vignette END event received from", socket.id);
       io.emit("vignette:end");
     });
 

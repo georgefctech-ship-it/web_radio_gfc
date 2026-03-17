@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import Hls from 'hls.js';
+import { socket } from '../lib/socket';
 import { radioService, type RadioStation } from '../services/radioService';
 
 interface PlayerContextType {
@@ -29,6 +30,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isDucked, setIsDucked] = useState(false);
   const [isVignetteMuted, setIsVignetteMuted] = useState(false);
+  const [wasPlayingBeforeVignette, setWasPlayingBeforeVignette] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -104,6 +106,57 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audioRef.current.volume = (isMuted ? 0 : volume) * duckFactor * vignetteFactor;
     }
   }, [volume, isMuted, isDucked, isVignetteMuted]);
+
+  const isPlayingRef = useRef(isPlaying);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  // Handle Vignette Socket Events
+  useEffect(() => {
+    console.log("[Context] Setting up vignette socket listeners. Socket connected:", socket.connected);
+    
+    const onConnect = () => console.log("[Context] Socket connected");
+    const onDisconnect = () => console.log("[Context] Socket disconnected");
+    
+    const handleVignetteStart = () => {
+      console.log("[Context] Vignette START received. Current isPlaying:", isPlayingRef.current);
+      setIsVignetteMuted(true);
+      
+      // If radio is playing, pause it and remember to resume
+      if (isPlayingRef.current) {
+        console.log("[Context] Pausing radio for vignette");
+        setWasPlayingBeforeVignette(true);
+        setIsPlaying(false);
+      }
+    };
+
+    const handleVignetteEnd = () => {
+      console.log("[Context] Vignette END received");
+      setIsVignetteMuted(false);
+      
+      // If it was playing before, resume it
+      setWasPlayingBeforeVignette(prev => {
+        if (prev) {
+          console.log("[Context] Resuming radio after vignette");
+          setIsPlaying(true);
+        }
+        return false;
+      });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('vignette:start', handleVignetteStart);
+    socket.on('vignette:end', handleVignetteEnd);
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('vignette:start', handleVignetteStart);
+      socket.off('vignette:end', handleVignetteEnd);
+    };
+  }, []); // No dependencies, use ref for isPlaying
 
   // VU Meter Logic
   useEffect(() => {
