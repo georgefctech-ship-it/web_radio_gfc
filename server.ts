@@ -98,6 +98,11 @@ async function startServer() {
     });
 
     socket.on("vignette:start", (data) => {
+      // If no broadcaster is set, the one starting the vignette becomes the broadcaster
+      if (!liveBroadcasterId) {
+        liveBroadcasterId = socket.id;
+      }
+      
       if (socket.id === liveBroadcasterId) {
         console.log("[Socket] Vignette START event received from broadcaster", socket.id, data?.url);
         io.emit("vignette:start", data);
@@ -113,7 +118,7 @@ async function startServer() {
 
     // WebRTC Signaling Relay
     socket.on("webrtc:request-stream", () => {
-      if (isLive && liveBroadcasterId) {
+      if (liveBroadcasterId) {
         io.to(liveBroadcasterId).emit("webrtc:request-stream", { listenerId: socket.id });
       }
     });

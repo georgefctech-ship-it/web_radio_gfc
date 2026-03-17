@@ -12,9 +12,12 @@ export const useAudioMixer = () => {
   const micStreamRef = useRef<MediaStream | null>(null);
   const micNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micGainRef = useRef<GainNode | null>(null);
+  const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const vignetteGainRef = useRef<GainNode | null>(null);
+  const vignetteAnalyserRef = useRef<AnalyserNode | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
+  const masterAnalyserRef = useRef<AnalyserNode | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [micVolume, setMicVolume] = useState(1);
@@ -22,6 +25,7 @@ export const useAudioMixer = () => {
   const [isMicActive, setIsMicActive] = useState(false);
   const [isVignettePlaying, setIsVignettePlaying] = useState(false);
   const [vignetteVolume, setVignetteVolume] = useState(1);
+  const [isMonitoring, setIsMonitoring] = useState(false);
   const activeVignettesRef = useRef<Map<string, { source: AudioBufferSourceNode, gain: GainNode }>>(new Map());
 
   const initialize = useCallback(async () => {
@@ -36,19 +40,34 @@ export const useAudioMixer = () => {
     masterGain.gain.value = masterVolume;
     masterGainRef.current = masterGain;
 
+    // Vignette Gain & Analyser
+    const vGain = ctx.createGain();
+    vGain.gain.value = vignetteVolume;
+    vignetteGainRef.current = vGain;
+    
+    const vAnalyser = ctx.createAnalyser();
+    vAnalyser.fftSize = 256;
+    vignetteAnalyserRef.current = vAnalyser;
+    vGain.connect(vAnalyser);
+    vAnalyser.connect(masterGain);
+
     // Destination for streaming
     const dest = ctx.createMediaStreamDestination();
     destinationRef.current = dest;
 
-    // Analyser for VU meter
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-    analyserRef.current = analyser;
+    // Master Analyser for VU meter
+    const masterAnalyser = ctx.createAnalyser();
+    masterAnalyser.fftSize = 256;
+    masterAnalyserRef.current = masterAnalyser;
 
-    // Connections: Master -> Analyser -> Destination & Audio Out (for monitoring)
-    masterGain.connect(analyser);
-    analyser.connect(dest);
-    analyser.connect(ctx.destination); // Monitor locally
+    // Connections: Master -> Analyser -> Destination
+    masterGain.connect(masterAnalyser);
+    masterAnalyser.connect(dest);
+    
+    // Monitoring is handled separately to allow toggling
+    if (isMonitoring) {
+      masterAnalyser.connect(ctx.destination);
+    }
 
     console.log("[AudioMixer] Initialized. Stream tracks:", dest.stream.getTracks().length);
     dest.stream.getTracks().forEach(t => console.log(`[AudioMixer] Track: ${t.kind}, ID: ${t.id}, Enabled: ${t.enabled}`));
@@ -86,8 +105,13 @@ export const useAudioMixer = () => {
         gain.gain.value = micVolume;
         micGainRef.current = gain;
 
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        micAnalyserRef.current = analyser;
+
         source.connect(gain);
-        gain.connect(masterGainRef.current!);
+        gain.connect(analyser);
+        analyser.connect(masterGainRef.current!);
         
         setIsMicActive(true);
       } catch (err) {
@@ -113,9 +137,9 @@ export const useAudioMixer = () => {
 
   const updateVignetteVolume = useCallback((val: number) => {
     setVignetteVolume(val);
-    activeVignettesRef.current.forEach(({ gain }) => {
-      gain.gain.setTargetAtTime(val, audioContextRef.current!.currentTime, 0.05);
-    });
+    if (vignetteGainRef.current) {
+      vignetteGainRef.current.gain.setTargetAtTime(val, audioContextRef.current!.currentTime, 0.05);
+    }
   }, []);
 
   const stopAllVignettes = useCallback(() => {
@@ -206,18 +230,15 @@ export const useAudioMixer = () => {
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
 
-      const gain = ctx.createGain();
-      gain.gain.value = vignetteVolume;
-
-      source.connect(gain);
-      gain.connect(masterGainRef.current!);
+      source.connect(vignetteGainRef.current!);
       
       const vignetteId = Math.random().toString(36).substring(7);
-      activeVignettesRef.current.set(vignetteId, { source, gain });
+      activeVignettesRef.current.set(vignetteId, { source, gain: vignetteGainRef.current! });
 
+      setIsVignettePlaying(true);
       console.log("[AudioMixer] Emitting vignette:start", url);
       socket.emit('vignette:start', { url });
-      setIsVignettePlaying(true);
+      
       source.start(0);
       
       // Cleanup
@@ -229,7 +250,6 @@ export const useAudioMixer = () => {
           setIsVignettePlaying(false);
         }
         source.disconnect();
-        gain.disconnect();
       };
     } catch (err: any) {
       console.error("Failed to play vignette:", err);
@@ -242,8 +262,27 @@ export const useAudioMixer = () => {
     return destinationRef.current?.stream || null;
   }, []);
 
-  const getAnalyser = useCallback(() => {
-    return analyserRef.current;
+  const toggleMonitoring = useCallback(() => {
+    if (!audioContextRef.current || !masterAnalyserRef.current) return;
+    
+    const newState = !isMonitoring;
+    setIsMonitoring(newState);
+    
+    if (newState) {
+      masterAnalyserRef.current.connect(audioContextRef.current.destination);
+    } else {
+      try {
+        masterAnalyserRef.current.disconnect(audioContextRef.current.destination);
+      } catch (e) {
+        // Might not be connected
+      }
+    }
+  }, [isMonitoring]);
+
+  const getAnalyser = useCallback((type: 'mic' | 'vignette' | 'master' = 'master') => {
+    if (type === 'mic') return micAnalyserRef.current;
+    if (type === 'vignette') return vignetteAnalyserRef.current;
+    return masterAnalyserRef.current;
   }, []);
 
   return {
@@ -260,6 +299,8 @@ export const useAudioMixer = () => {
     playVignette,
     getMixedStream,
     getAnalyser,
+    toggleMonitoring,
+    isMonitoring,
     isInitialized,
     isVignettePlaying
   };
