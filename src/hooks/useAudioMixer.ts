@@ -150,10 +150,34 @@ export const useAudioMixer = () => {
       }
 
       // Use the newer promise-based decodeAudioData if available
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer).catch(err => {
-        console.error("decodeAudioData failed:", err);
-        throw new Error("Unable to decode audio data. The file might be corrupted or in an unsupported format.");
-      });
+      let audioBuffer: AudioBuffer;
+      try {
+        audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      } catch (err: any) {
+        console.warn(`decodeAudioData failed (size: ${arrayBuffer.byteLength} bytes), attempting raw PCM fallback:`, err);
+        
+        // Fallback: Try to treat as raw 16-bit PCM 24kHz (Gemini TTS default)
+        try {
+          if (arrayBuffer.byteLength < 2) {
+            throw new Error("Buffer too small for PCM data");
+          }
+          
+          // Ensure we don't try to read past the end of the buffer if it has an odd length
+          const numSamples = Math.floor(arrayBuffer.byteLength / 2);
+          const pcmData = new Int16Array(arrayBuffer, 0, numSamples);
+          
+          audioBuffer = ctx.createBuffer(1, numSamples, 24000);
+          const channelData = audioBuffer.getChannelData(0);
+          for (let i = 0; i < numSamples; i++) {
+            // Convert 16-bit PCM to float [-1.0, 1.0]
+            channelData[i] = pcmData[i] / 32768.0;
+          }
+          console.log("Raw PCM fallback successful, samples:", numSamples);
+        } catch (fallbackErr: any) {
+          console.error("Raw PCM fallback also failed:", fallbackErr);
+          throw new Error(`Unable to decode audio data (size: ${arrayBuffer.byteLength} bytes): ${fallbackErr.message || "Unknown error"}`);
+        }
+      }
 
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
