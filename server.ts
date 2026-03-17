@@ -89,6 +89,14 @@ async function startServer() {
       }
     });
 
+    socket.on("vignette:start", () => {
+      io.emit("vignette:start");
+    });
+
+    socket.on("vignette:end", () => {
+      io.emit("vignette:end");
+    });
+
     // WebRTC Signaling Relay
     socket.on("webrtc:request-stream", () => {
       if (isLive && liveBroadcasterId) {

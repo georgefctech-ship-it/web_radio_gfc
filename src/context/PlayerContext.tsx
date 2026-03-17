@@ -9,12 +9,14 @@ interface PlayerContextType {
   volume: number;
   isMuted: boolean;
   isDucked: boolean;
+  isVignetteMuted: boolean;
   audioLevel: number;
   setCurrentStation: (station: RadioStation) => void;
   setIsPlaying: (playing: boolean) => void;
   setVolume: (volume: number) => void;
   setIsMuted: (muted: boolean) => void;
   setIsDucked: (ducked: boolean) => void;
+  setIsVignetteMuted: (muted: boolean) => void;
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
@@ -26,6 +28,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [volume, setVolume] = useState(0.7);
   const [isMuted, setIsMuted] = useState(false);
   const [isDucked, setIsDucked] = useState(false);
+  const [isVignetteMuted, setIsVignetteMuted] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -96,9 +99,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.volume = (isMuted ? 0 : volume) * (isDucked ? 0.2 : 1.0);
+      const duckFactor = isDucked ? 0.2 : 1.0;
+      const vignetteFactor = isVignetteMuted ? 0 : 1.0;
+      audioRef.current.volume = (isMuted ? 0 : volume) * duckFactor * vignetteFactor;
     }
-  }, [volume, isMuted, isDucked]);
+  }, [volume, isMuted, isDucked, isVignetteMuted]);
 
   // VU Meter Logic
   useEffect(() => {
@@ -162,12 +167,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       volume,
       isMuted,
       isDucked,
+      isVignetteMuted,
       audioLevel,
       setCurrentStation,
       setIsPlaying,
       setVolume,
       setIsMuted,
       setIsDucked,
+      setIsVignetteMuted,
       audioRef
     }}>
       {children}

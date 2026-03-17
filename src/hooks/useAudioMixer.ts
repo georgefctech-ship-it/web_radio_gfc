@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { socket } from '../lib/socket';
 
 export interface Vignette {
   id: string;
@@ -19,6 +20,7 @@ export const useAudioMixer = () => {
   const [micVolume, setMicVolume] = useState(1);
   const [masterVolume, setMasterVolume] = useState(1);
   const [isMicActive, setIsMicActive] = useState(false);
+  const [isVignettePlaying, setIsVignettePlaying] = useState(false);
 
   const initialize = useCallback(async () => {
     if (audioContextRef.current) return;
@@ -188,10 +190,14 @@ export const useAudioMixer = () => {
       source.connect(gain);
       gain.connect(masterGainRef.current!);
       
+      socket.emit('vignette:start');
+      setIsVignettePlaying(true);
       source.start(0);
       
       // Cleanup
       source.onended = () => {
+        socket.emit('vignette:end');
+        setIsVignettePlaying(false);
         source.disconnect();
         gain.disconnect();
       };
@@ -221,6 +227,7 @@ export const useAudioMixer = () => {
     playVignette,
     getMixedStream,
     getAnalyser,
-    isInitialized
+    isInitialized,
+    isVignettePlaying
   };
 };

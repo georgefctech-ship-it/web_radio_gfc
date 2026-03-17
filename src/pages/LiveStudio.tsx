@@ -12,7 +12,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 
 export const LiveStudio: React.FC = () => {
   const navigate = useNavigate();
-  const { setIsDucked } = usePlayer();
+  const { setIsDucked, setIsVignetteMuted } = usePlayer();
   const {
     initialize,
     toggleMic,
@@ -24,7 +24,8 @@ export const LiveStudio: React.FC = () => {
     playVignette,
     getMixedStream,
     getAnalyser,
-    isInitialized
+    isInitialized,
+    isVignettePlaying
   } = useAudioMixer();
 
   const [isOnAir, setIsOnAir] = useState(false);
@@ -62,6 +63,10 @@ export const LiveStudio: React.FC = () => {
   useEffect(() => {
     setIsDucked(isMicActive);
   }, [isMicActive, setIsDucked]);
+
+  useEffect(() => {
+    setIsVignetteMuted(isVignettePlaying);
+  }, [isVignettePlaying, setIsVignetteMuted]);
 
   // Load Vignettes
   useEffect(() => {

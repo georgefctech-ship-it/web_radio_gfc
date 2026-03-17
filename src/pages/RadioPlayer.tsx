@@ -71,6 +71,8 @@ export default function RadioPlayer() {
     setVolume, 
     isMuted, 
     setIsMuted, 
+    setIsDucked,
+    setIsVignetteMuted,
     audioLevel,
     audioRef
   } = usePlayer();
@@ -494,14 +496,26 @@ export default function RadioPlayer() {
         await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
       }
     });
+    
+    socket.on('vignette:start', () => {
+      console.log("[Player] Vinheta iniciada no estúdio");
+      setIsVignetteMuted(true);
+    });
+
+    socket.on('vignette:end', () => {
+      console.log("[Player] Vinheta finalizada no estúdio");
+      setIsVignetteMuted(false);
+    });
 
     return () => {
       socket.off('listeners:count');
       socket.off('live:status');
       socket.off('webrtc:offer');
       socket.off('webrtc:ice-candidate');
+      socket.off('vignette:start');
+      socket.off('vignette:end');
     };
-  }, []);
+  }, [setIsVignetteMuted]);
 
   // Request stream when live starts
   useEffect(() => {
@@ -515,18 +529,11 @@ export default function RadioPlayer() {
     if (liveStream && liveAudioRef.current) {
       liveAudioRef.current.srcObject = liveStream;
       liveAudioRef.current.play().catch(console.error);
-      
-      // Duck radio volume when live is active
-      if (audioRef.current) {
-        audioRef.current.volume = volume * 0.2;
-      }
+      setIsDucked(true);
     } else {
-      // Restore radio volume when live ends
-      if (audioRef.current) {
-        audioRef.current.volume = isMuted ? 0 : volume;
-      }
+      setIsDucked(false);
     }
-  }, [liveStream, volume, isMuted, audioRef]);
+  }, [liveStream, setIsDucked]);
 
   const handleNext = useCallback(() => {
     if (!currentStation || stations.length === 0) return;
