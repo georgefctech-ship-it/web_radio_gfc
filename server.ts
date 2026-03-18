@@ -11,6 +11,18 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PORT = Number(process.env.PORT || 3000);
+const rawAllowedOrigins = process.env.ALLOWED_ORIGINS || process.env.APP_URL || "*";
+const allowedOrigins = rawAllowedOrigins
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const isOriginAllowed = (origin?: string) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes("*")) return true;
+  return allowedOrigins.includes(origin);
+};
 
 async function startServer() {
   const app = express();
@@ -20,11 +32,25 @@ async function startServer() {
     }
     next();
   });
-  app.use(cors()); // Enable CORS for all routes
+  app.use(cors({
+    origin(origin, callback) {
+      if (isOriginAllowed(origin || undefined)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    }
+  }));
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      origin(origin, callback) {
+        if (isOriginAllowed(origin || undefined)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`Socket origin not allowed: ${origin}`));
+      },
       methods: ["GET", "POST"],
       credentials: true
     },
@@ -32,9 +58,6 @@ async function startServer() {
     pingTimeout: 60000,
     pingInterval: 25000
   });
-
-  const PORT = 3000;
-
   // ... (Socket.io logic remains same)
   const messages: any[] = [];
   const stationVotes: Record<string, { likes: number, dislikes: number }> = {};
@@ -369,7 +392,8 @@ async function startServer() {
   });
 
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] Allowed origins: ${allowedOrigins.join(", ")}`);
   });
 }
 
