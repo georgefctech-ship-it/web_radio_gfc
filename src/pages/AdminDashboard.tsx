@@ -20,7 +20,10 @@ import {
   Save,
   CheckCircle2,
   AlertCircle,
-  Activity
+  Activity,
+  Mic2,
+  FileVideo,
+  Upload
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -72,11 +75,15 @@ export default function AdminDashboard() {
     pushNotifications: false
   });
   const [customStations, setCustomStations] = useState<any[]>([]);
+  const [podcasts, setPodcasts] = useState<any[]>([]);
   const [recentHistory, setRecentHistory] = useState<any[]>([]);
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStation, setEditingStation] = useState<any>(null);
   const [stationForm, setStationForm] = useState({ name: '', url: '', genre: '', favicon: '' });
+  const [podcastForm, setPodcastForm] = useState({ title: '', author: '', description: '', image: '', category: '', duration: '', media_url: '' });
+  const [isPodcastModalOpen, setIsPodcastModalOpen] = useState(false);
+  const [editingPodcast, setEditingPodcast] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   
@@ -117,6 +124,10 @@ export default function AdminDashboard() {
         // Fetch custom stations
         const { data: stations } = await supabase.from('stations').select('*');
         if (stations) setCustomStations(stations);
+
+        // Fetch podcasts
+        const { data: podcastsData } = await supabase.from('podcasts').select('*');
+        if (podcastsData) setPodcasts(podcastsData);
 
         // Fetch recent history
         try {
@@ -213,6 +224,82 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleSavePodcast = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        ...podcastForm,
+        updated_at: new Date().toISOString()
+      };
+
+      if (editingPodcast) {
+        const { error } = await supabase.from('podcasts').update(payload).eq('id', editingPodcast.id);
+        if (error) throw error;
+        showNotification('success', 'Podcast atualizado!');
+      } else {
+        const { error } = await supabase.from('podcasts').insert([payload]);
+        if (error) throw error;
+        showNotification('success', 'Podcast criado!');
+      }
+
+      const { data: podcastsData } = await supabase.from('podcasts').select('*');
+      if (podcastsData) setPodcasts(podcastsData);
+      
+      setIsPodcastModalOpen(false);
+      setEditingPodcast(null);
+      setPodcastForm({ title: '', author: '', description: '', image: '', category: '', duration: '', media_url: '' });
+    } catch (err: any) {
+      showNotification('error', err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeletePodcast = async (id: string) => {
+    if (!confirm('Excluir este podcast?')) return;
+    try {
+      const { error } = await supabase.from('podcasts').delete().eq('id', id);
+      if (error) throw error;
+      setPodcasts(prev => prev.filter(p => p.id !== id));
+      showNotification('success', 'Podcast excluído!');
+    } catch (err: any) {
+      showNotification('error', err.message);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'media') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSaving(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `podcasts/${fileName}`;
+
+      const { error: uploadError, data } = await supabase.storage
+        .from('meus_arquivos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('meus_arquivos')
+        .getPublicUrl(filePath);
+
+      if (type === 'image') {
+        setPodcastForm(prev => ({ ...prev, image: publicUrl }));
+      } else {
+        setPodcastForm(prev => ({ ...prev, media_url: publicUrl }));
+      }
+      showNotification('success', 'Arquivo enviado!');
+    } catch (err: any) {
+      showNotification('error', 'Erro no upload: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
   const handleDeleteStation = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta estação?')) return;
     try {
@@ -290,6 +377,7 @@ export default function AdminDashboard() {
             {[
               { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
               { id: 'stations', icon: Radio, label: 'Estações' },
+              { id: 'podcasts', icon: Mic2, label: 'Podcasts' },
               { id: 'users', icon: Users, label: 'Usuários' },
               { id: 'history', icon: History, label: 'Histórico' },
               { id: 'settings', icon: Settings, label: 'Configurações' },
@@ -622,6 +710,77 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {activeMenu === 'podcasts' && (
+            <div className="space-y-12">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-6xl font-black tracking-tighter uppercase">Podcasts</h2>
+                  <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.3em] mt-2">Gerencie seus episódios e mídias</p>
+                </div>
+                <button 
+                  onClick={() => { 
+                    setEditingPodcast(null); 
+                    setPodcastForm({ title: '', author: '', description: '', image: '', category: '', duration: '', media_url: '' }); 
+                    setIsPodcastModalOpen(true); 
+                  }}
+                  className="bg-primary text-white px-10 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs flex items-center gap-4 hover:scale-105 transition-all shadow-2xl shadow-primary/40"
+                >
+                  <Plus className="size-6" />
+                  Novo Podcast
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                {podcasts.map((podcast) => (
+                  <div key={podcast.id} className="bg-[#141414] p-6 rounded-[32px] border border-white/5 group hover:border-primary/30 transition-all shadow-2xl">
+                    <div className="relative aspect-square rounded-[24px] overflow-hidden mb-6 shadow-2xl">
+                      <img 
+                        src={podcast.image || `https://picsum.photos/seed/${podcast.title}/400`} 
+                        alt={podcast.title} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+                        <button 
+                          onClick={() => {
+                            setEditingPodcast(podcast);
+                            setPodcastForm({
+                              title: podcast.title,
+                              author: podcast.author,
+                              description: podcast.description,
+                              image: podcast.image,
+                              category: podcast.category,
+                              duration: podcast.duration,
+                              media_url: podcast.media_url
+                            });
+                            setIsPodcastModalOpen(true);
+                          }}
+                          className="size-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-110 transition-all shadow-xl"
+                        >
+                          <Edit2 className="size-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeletePodcast(podcast.id)}
+                          className="size-10 bg-red-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-all shadow-xl"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="font-black text-base uppercase tracking-tight mb-1 truncate">{podcast.title}</h3>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] truncate">{podcast.author}</p>
+                      <div className="mt-4 flex items-center justify-between">
+                        <span className="px-2 py-1 bg-white/5 rounded-md text-[8px] font-black text-gray-400 uppercase tracking-widest">{podcast.category}</span>
+                        <span className="text-[8px] font-black text-primary uppercase tracking-widest">{podcast.duration}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activeMenu === 'users' && (
             <div className="space-y-8">
               <h2 className="text-3xl font-black tracking-tighter uppercase">Usuários</h2>
@@ -918,7 +1077,147 @@ export default function AdminDashboard() {
             </div>
           </motion.div>
         )}
+
+        {isPodcastModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-xl p-6"
+          >
+            <div className="max-w-3xl w-full bg-[#1A1A1A] border border-white/10 rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/5">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tighter uppercase">{editingPodcast ? 'Editar Podcast' : 'Novo Podcast'}</h2>
+                  <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Adicione episódios e mídias do seu PC</p>
+                </div>
+                <button onClick={() => { setIsPodcastModalOpen(false); setEditingPodcast(null); }} className="size-10 bg-white/5 rounded-full flex items-center justify-center hover:bg-white/10 transition-all">
+                  <X className="size-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSavePodcast} className="p-10 space-y-6 overflow-y-auto custom-scrollbar">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Título</label>
+                    <input 
+                      required
+                      value={podcastForm.title}
+                      onChange={(e) => setPodcastForm({ ...podcastForm, title: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-primary transition-all" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Autor/Canal</label>
+                    <input 
+                      required
+                      value={podcastForm.author}
+                      onChange={(e) => setPodcastForm({ ...podcastForm, author: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-primary transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Descrição</label>
+                  <textarea 
+                    value={podcastForm.description}
+                    onChange={(e) => setPodcastForm({ ...podcastForm, description: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-primary transition-all h-24 resize-none" 
+                  />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Categoria</label>
+                    <input 
+                      value={podcastForm.category}
+                      onChange={(e) => setPodcastForm({ ...podcastForm, category: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-primary transition-all" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Duração (ex: 45 min)</label>
+                    <input 
+                      value={podcastForm.duration}
+                      onChange={(e) => setPodcastForm({ ...podcastForm, duration: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-primary transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Capa do Podcast</label>
+                    <div className="flex flex-col gap-4">
+                      <div className="flex gap-4">
+                        <input 
+                          type="text"
+                          placeholder="URL da imagem"
+                          value={podcastForm.image}
+                          onChange={(e) => setPodcastForm({ ...podcastForm, image: e.target.value })}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-primary transition-all text-sm" 
+                        />
+                        <label className="size-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center cursor-pointer hover:bg-white/10 transition-all">
+                          <Upload className="size-5 text-gray-400" />
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'image')} />
+                        </label>
+                      </div>
+                      {podcastForm.image && (
+                        <img src={podcastForm.image} alt="Preview" className="w-full aspect-video object-cover rounded-2xl border border-white/10" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Mídia (Vídeo ou Áudio)</label>
+                    <div className="flex flex-col gap-4">
+                      <div className="flex gap-4">
+                        <input 
+                          type="text"
+                          placeholder="URL do vídeo/áudio"
+                          value={podcastForm.media_url}
+                          onChange={(e) => setPodcastForm({ ...podcastForm, media_url: e.target.value })}
+                          className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-6 py-4 outline-none focus:border-primary transition-all text-sm" 
+                        />
+                        <label className="size-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center cursor-pointer hover:bg-white/10 transition-all">
+                          <FileVideo className="size-5 text-gray-400" />
+                          <input type="file" accept="video/*,audio/*" className="hidden" onChange={(e) => handleFileUpload(e, 'media')} />
+                        </label>
+                      </div>
+                      {podcastForm.media_url && (
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-3">
+                          <CheckCircle2 className="size-5 text-emerald-500" />
+                          <span className="text-xs text-gray-400 truncate">{podcastForm.media_url}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 flex gap-4">
+                  <button 
+                    type="button"
+                    onClick={() => setIsPodcastModalOpen(false)}
+                    className="flex-1 py-5 bg-white/5 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-white/10 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    disabled={saving}
+                    className="flex-[2] py-5 bg-primary text-white font-black uppercase tracking-widest rounded-2xl hover:scale-[1.02] transition-all disabled:opacity-50 shadow-lg shadow-primary/20 flex items-center justify-center gap-3"
+                  >
+                    {saving ? (
+                      <div className="size-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Save className="size-5" />
+                    )}
+                    {editingPodcast ? 'Salvar Alterações' : 'Publicar Podcast'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
-      </div>
+    </div>
   );
 }

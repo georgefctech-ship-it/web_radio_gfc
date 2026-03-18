@@ -14,12 +14,23 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
+  app.use((req, res, next) => {
+    if (req.url.includes('socket.io')) {
+      console.log(`[Server] Socket.io request: ${req.method} ${req.url}`);
+    }
+    next();
+  });
   app.use(cors()); // Enable CORS for all routes
   const httpServer = createServer(app);
   const io = new Server(httpServer, {
     cors: {
       origin: "*",
+      methods: ["GET", "POST"],
+      credentials: true
     },
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000
   });
 
   const PORT = 3000;

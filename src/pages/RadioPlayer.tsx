@@ -1183,170 +1183,63 @@ export default function RadioPlayer() {
           </div>
         )}
         {/* Top Navigation Bar */}
-        <header className="h-20 flex items-center justify-between px-4 sm:px-10 border-b border-white/5 bg-bg-dark/80 backdrop-blur-xl sticky top-0 z-40">
-          <div className="flex items-center gap-4 sm:gap-8">
-            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-full">
+        <header className="h-20 flex items-center justify-between px-4 sm:px-8 border-b border-white/5 bg-bg-dark/80 backdrop-blur-xl sticky top-0 z-40">
+          {/* Left: Branding Logo */}
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-full transition-all active:scale-95">
               <Menu className="size-5" />
             </button>
-
-            {/* Branding Logo in Header - Always Visible */}
-            <div className="flex items-center gap-3">
-              <img 
-                src={branding.logo} 
-                alt="Logo" 
-                className="size-8 sm:size-10 rounded-xl object-cover border border-white/10"
-                referrerPolicy="no-referrer"
-              />
-              <h1 className="hidden sm:block text-sm font-black tracking-tighter uppercase text-white">{branding.name}</h1>
-            </div>
-
-            {isLive && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-blue-600/10 border border-blue-600/20 rounded-full animate-pulse">
-                <div className="size-1.5 bg-blue-600 rounded-full" />
-                <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest">LIVE</span>
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="relative">
+                <img 
+                  src={branding.logo} 
+                  alt="Logo" 
+                  className="size-10 rounded-xl object-cover border border-white/10 group-hover:border-primary/50 transition-all shadow-lg"
+                  referrerPolicy="no-referrer"
+                />
               </div>
-            )}
-
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                <Users className="size-3 text-primary" />
-                <span className="text-[10px] font-black">{onlineListeners}</span>
+              <div className="hidden sm:block">
+                <h1 className="text-sm font-black tracking-tighter uppercase text-white leading-none mb-0.5">{branding.name}</h1>
+                <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest leading-none">Rádio Digital</p>
               </div>
-              
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                  <div className={`size-1.5 rounded-full ${
-                    socketStatus === 'connected' ? 'bg-emerald-500' : 
-                    socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
-                    'bg-red-500'
-                  }`} />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                    {socketStatus === 'connected' ? 'Online' : 
-                     socketStatus === 'connecting' ? 'Conectando' : 
-                     'Offline'}
-                  </span>
-                  <button 
-                    onClick={() => {
-                      setSocketStatus('connecting');
-                      socket.disconnect().connect();
-                    }}
-                    className="ml-1 p-1 hover:bg-white/10 rounded-full transition-colors"
-                    title="Reconectar"
-                  >
-                    <Zap className={`size-2 ${socketStatus === 'connecting' ? 'animate-pulse text-yellow-500' : 'text-primary'}`} />
-                  </button>
-                  <button
-                    onClick={() => setShowDebug(!showDebug)}
-                    className="ml-1 p-1 hover:bg-white/10 rounded-full transition-colors"
-                  >
-                    <Info className="size-2 text-white/40" />
-                  </button>
-                </div>
-                
-                {showDebug && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-black/60 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-[8px] font-mono space-y-1 max-w-[200px]"
-                  >
-                    <p className="text-white/60 uppercase font-black mb-1">Debug Info</p>
-                    <p><span className="text-primary">ID:</span> {socket.id || 'N/A'}</p>
-                    <p><span className="text-primary">Status:</span> {socketStatus}</p>
-                    {socketError && <p className="text-red-500"><span className="text-primary">Erro:</span> {socketError}</p>}
-                    <p><span className="text-primary">Transport:</span> {socket.io?.engine?.transport?.name || 'N/A'}</p>
-                    <p><span className="text-primary">Broadcaster:</span> {broadcasterId ? 'Ativo' : 'Inativo'}</p>
-                  </motion.div>
-                )}
-              </div>
-
-              {latency && (
-                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                  <Activity className="size-3 text-emerald-500" />
-                  <span className="text-[10px] font-black">{latency}ms</span>
-                </div>
-              )}
-            </div>
-            
-            <nav className="hidden md:flex items-center gap-6">
-              <button 
-                onClick={() => setActiveTab('explore')}
-                className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${activeTab === 'explore' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-              >
-                RÁDIOS
-              </button>
-              <button 
-                onClick={() => setActiveTab('map')}
-                className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${activeTab === 'map' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-              >
-                MAPA
-              </button>
-              <button 
-                onClick={() => setActiveTab('chat')}
-                className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${activeTab === 'chat' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
-              >
-                CHAT
-              </button>
-              <Link to="/guiche-web" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">GUICHÉ WEB</Link>
-              <Link to="/podcasts" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">PODCAST</Link>
-              <Link to="/news" className="text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
-            </nav>
-
-            {/* Live Stream Indicator */}
-          <AnimatePresence>
-            {(isLive || isVignettePlaying) && (
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                className="fixed bottom-32 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2"
-              >
-                {!isLiveAudioPlaying && audioError && (
-                  <button 
-                    onClick={() => {
-                      if (liveAudioRef.current) {
-                        liveAudioRef.current.play()
-                          .then(() => {
-                            setIsLiveAudioPlaying(true);
-                            setAudioError(null);
-                          })
-                          .catch(err => {
-                            console.error("[Audio] Manual play failed:", err);
-                            setAudioError("Erro ao iniciar áudio. Clique novamente.");
-                          });
-                      }
-                    }}
-                    className="px-6 py-3 bg-primary text-white rounded-full text-[12px] font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border-2 border-white/20"
-                  >
-                    <Play className="size-4 fill-current" />
-                    {audioError}
-                  </button>
-                )}
-                <div className={`px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md border ${
-                  isVignettePlaying 
-                    ? 'bg-primary/20 border-primary/30 text-primary' 
-                    : 'bg-red-500/20 border-red-500/30 text-red-500'
-                }`}>
-                  <div className={`size-2 rounded-full animate-pulse ${isVignettePlaying ? 'bg-primary' : 'bg-red-500'}`} />
-                  <span className="text-xs font-black uppercase tracking-widest">
-                    {isVignettePlaying ? 'Vinheta no Ar' : 'Estúdio ao Vivo'}
-                  </span>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-            <div className="md:hidden flex items-center bg-white/5 rounded-full p-1 border border-white/10">
-              <button 
-                onClick={() => setActiveTab('explore')}
-                className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'explore' ? 'bg-primary text-white' : 'text-gray-500'}`}
-              >
-                RÁDIOS
-              </button>
-            </div>
+            </Link>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-6">
-            <div className="relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-3 text-gray-500 group-focus-within:text-primary transition-colors z-10" />
+          {/* Center: Navigation (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+            {[
+              { label: 'RÁDIOS', active: activeTab === 'explore', onClick: () => setActiveTab('explore') },
+              { label: 'MAPA', active: activeTab === 'map', onClick: () => setActiveTab('map') },
+              { label: 'CHAT', active: activeTab === 'chat', onClick: () => setActiveTab('chat') },
+            ].map((item) => (
+              <button 
+                key={item.label}
+                onClick={item.onClick}
+                className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-2 ${
+                  item.active ? 'text-primary' : 'text-gray-500 hover:text-white'
+                }`}
+              >
+                {item.label}
+                {item.active && (
+                  <motion.div 
+                    layoutId="nav-active"
+                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                  />
+                )}
+              </button>
+            ))}
+            <div className="w-[1px] h-4 bg-white/10 mx-2" />
+            <div className="flex items-center gap-6">
+              <Link to="/guiche-web" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-colors">GUICHÊ WEB</Link>
+              <Link to="/podcasts" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-colors">PODCAST</Link>
+              <Link to="/news" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
+            </div>
+          </nav>
+
+          {/* Right: Search & Actions */}
+          <div className="flex items-center gap-3 sm:gap-6">
+            <div className="relative group hidden sm:block">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-3.5 text-gray-500 group-focus-within:text-primary transition-colors z-10" />
               {isLoaded && !mapsAuthError && !loadError && activeTab === 'map' ? (
                 <Autocomplete
                   onLoad={onAutocompleteLoad}
@@ -1358,49 +1251,95 @@ export default function RadioPlayer() {
                 >
                   <input 
                     type="text"
-                    placeholder="Buscar endereço, CEP, cidade..."
+                    placeholder="Buscar endereço..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 outline-none focus:border-primary/50 transition-all text-[10px] font-medium w-32 sm:w-48 md:w-64 focus:w-40 sm:focus:w-64 md:focus:w-80"
+                    className="bg-white/5 border border-white/10 rounded-full py-2.5 pl-11 pr-6 outline-none focus:border-primary/50 focus:bg-white/10 transition-all text-[10px] font-medium w-48 md:w-64 focus:w-80"
                   />
                 </Autocomplete>
               ) : (
                 <input 
                   type="text"
-                  placeholder={activeTab === 'map' ? (mapsAuthError || loadError ? "Buscar rádios (Google Maps desativado)..." : "Buscar endereço...") : "Buscar rádios"}
+                  placeholder={activeTab === 'map' ? "Buscar endereço..." : "Buscar rádios..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 outline-none focus:border-primary/50 transition-all text-[10px] font-medium w-32 sm:w-48 md:w-64 focus:w-40 sm:focus:w-64 md:focus:w-80"
-                  title={mapsAuthError || loadError ? "O Google Maps requer faturação ativa e APIs (Places, Geocoding) ativadas na Consola Google Cloud." : ""}
+                  className="bg-white/5 border border-white/10 rounded-full py-2.5 pl-11 pr-6 outline-none focus:border-primary/50 focus:bg-white/10 transition-all text-[10px] font-medium w-48 md:w-64 focus:w-80"
                 />
               )}
             </div>
-            <button className="p-2 text-gray-500 hover:text-white transition-colors hidden sm:block">
-              <Bell className="size-5" />
-            </button>
-            <Link to="/admin" className="p-2 text-gray-500 hover:text-white transition-colors">
-              <User className="size-5" />
-            </Link>
-            
-            {/* Mobile Menu Toggle */}
-            <button 
-              onClick={() => setIsNavMenuOpen(true)}
-              className="md:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-full border border-white/10"
-            >
-              <Menu className="size-5" />
-            </button>
 
-            {isAdmin && (
-              <button 
-                onClick={() => supabase.auth.signOut()}
-                className="p-2 text-red-500 hover:text-red-400 transition-colors"
-                title="Sair"
-              >
-                <X className="size-5" />
+            <div className="flex items-center gap-2">
+              <button className="p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-full transition-all hidden sm:flex">
+                <Bell className="size-5" />
               </button>
-            )}
+              <Link to="/admin" className="p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-full transition-all">
+                <User className="size-5" />
+              </Link>
+              
+              {/* Mobile Menu Toggle */}
+              <button 
+                onClick={() => setIsNavMenuOpen(true)}
+                className="lg:hidden p-2.5 text-gray-400 hover:text-white bg-white/5 rounded-full border border-white/10 transition-all active:scale-95"
+              >
+                <Menu className="size-5" />
+              </button>
+
+              {isAdmin && (
+                <button 
+                  onClick={() => supabase.auth.signOut()}
+                  className="p-2.5 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all"
+                  title="Sair"
+                >
+                  <X className="size-5" />
+                </button>
+              )}
+            </div>
           </div>
         </header>
+
+        {/* Live Stream Indicator Overlay */}
+        <AnimatePresence>
+          {(isLive || isVignettePlaying) && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed bottom-32 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2"
+            >
+              {!isLiveAudioPlaying && audioError && (
+                <button 
+                  onClick={() => {
+                    if (liveAudioRef.current) {
+                      liveAudioRef.current.play()
+                        .then(() => {
+                          setIsLiveAudioPlaying(true);
+                          setAudioError(null);
+                        })
+                        .catch(err => {
+                          console.error("[Audio] Manual play failed:", err);
+                          setAudioError("Erro ao iniciar áudio. Clique novamente.");
+                        });
+                    }
+                  }}
+                  className="px-6 py-3 bg-primary text-white rounded-full text-[12px] font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border-2 border-white/20"
+                >
+                  <Play className="size-4 fill-current" />
+                  {audioError}
+                </button>
+              )}
+              <div className={`px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md border ${
+                isVignettePlaying 
+                  ? 'bg-primary/20 border-primary/30 text-primary' 
+                  : 'bg-red-500/20 border-red-500/30 text-red-500'
+              }`}>
+                <div className={`size-2 rounded-full animate-pulse ${isVignettePlaying ? 'bg-primary' : 'bg-red-500'}`} />
+                <span className="text-xs font-black uppercase tracking-widest">
+                  {isVignettePlaying ? 'Vinheta no Ar' : 'Estúdio ao Vivo'}
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-10">
@@ -1649,25 +1588,36 @@ export default function RadioPlayer() {
                 <div className="space-y-2">
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4 ml-2">Navegação</p>
                   {[
-                    { to: '/', icon: Radio, label: 'Rádios', active: activeTab === 'explore' },
-                    { to: '/mapa', icon: Map, label: 'Mapa Interativo' },
-                    { to: '/chat', icon: MessageSquare, label: 'Chat da Galera' },
-                    { to: '/guiche', icon: Ticket, label: 'Guichê Web' },
+                    { icon: Radio, label: 'Rádios', active: activeTab === 'explore', onClick: () => setActiveTab('explore') },
+                    { icon: Map, label: 'Mapa Interativo', active: activeTab === 'map', onClick: () => setActiveTab('map') },
+                    { icon: MessageSquare, label: 'Chat da Galera', active: activeTab === 'chat', onClick: () => setActiveTab('chat') },
+                    { to: '/guiche-web', icon: Ticket, label: 'Guichê Web' },
                     { to: '/podcasts', icon: Mic2, label: 'Podcasts' },
-                    { to: '/noticias', icon: Newspaper, label: 'Notícias' },
+                    { to: '/news', icon: Newspaper, label: 'Notícias' },
                     { to: '/suporte', icon: HelpCircle, label: 'Suporte' },
                   ].map((link) => (
-                    <Link
-                      key={link.label}
-                      to={link.to}
-                      onClick={() => setIsNavMenuOpen(false)}
-                      className={`flex items-center gap-4 p-4 rounded-2xl transition-all font-bold ${
-                        link.active ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                      }`}
-                    >
-                      <link.icon className="size-5" />
-                      {link.label}
-                    </Link>
+                    link.onClick ? (
+                      <button
+                        key={link.label}
+                        onClick={() => { link.onClick!(); setIsNavMenuOpen(false); }}
+                        className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all font-bold ${
+                          link.active ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        <link.icon className="size-5" />
+                        {link.label}
+                      </button>
+                    ) : (
+                      <Link
+                        key={link.label}
+                        to={link.to!}
+                        onClick={() => setIsNavMenuOpen(false)}
+                        className="flex items-center gap-4 p-4 rounded-2xl transition-all font-bold text-gray-400 hover:bg-white/5 hover:text-white"
+                      >
+                        <link.icon className="size-5" />
+                        {link.label}
+                      </Link>
+                    )
                   ))}
                 </div>
 

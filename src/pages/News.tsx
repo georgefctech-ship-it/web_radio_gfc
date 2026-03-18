@@ -53,52 +53,76 @@ export default function News() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<NewsItem | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedNews = localStorage.getItem('radio_news');
-    if (savedNews) {
-      setNews(JSON.parse(savedNews));
-    } else {
-      setNews(DEFAULT_NEWS);
-    }
-
+    fetchNews();
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAdmin(!!session);
     });
   }, []);
 
-  const saveNews = (updatedNews: NewsItem[]) => {
-    setNews(updatedNews);
-    localStorage.setItem('radio_news', JSON.stringify(updatedNews));
-  };
+  async function fetchNews() {
+    try {
+      const { data, error } = await supabase
+        .from('news')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setNews(data || []);
+    } catch (error) {
+      console.error('Error fetching news:', error);
+      // Fallback to default news if table doesn't exist or error
+      setNews(DEFAULT_NEWS);
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta notícia?')) {
-      saveNews(news.filter(item => item.id !== id));
+      try {
+        const { error } = await supabase.from('news').delete().eq('id', id);
+        if (error) throw error;
+        setNews(news.filter(item => item.id !== id));
+      } catch (error) {
+        console.error('Error deleting news:', error);
+      }
     }
   };
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newItem: NewsItem = {
-      id: editingItem?.id || Math.random().toString(36).substr(2, 9),
+    const newItem = {
       title: formData.get('title') as string,
       excerpt: formData.get('excerpt') as string,
-      date: editingItem?.date || new Date().toLocaleDateString('pt-BR'),
       author: formData.get('author') as string,
       image: formData.get('image') as string || 'https://picsum.photos/seed/news/800/400',
       category: formData.get('category') as string,
       url: formData.get('url') as string,
     };
 
-    if (editingItem) {
-      saveNews(news.map(item => item.id === editingItem.id ? newItem : item));
-    } else {
-      saveNews([newItem, ...news]);
+    try {
+      if (editingItem) {
+        const { error } = await supabase
+          .from('news')
+          .update(newItem)
+          .eq('id', editingItem.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('news')
+          .insert([newItem]);
+        if (error) throw error;
+      }
+      fetchNews();
+      setIsModalOpen(false);
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Error saving news:', error);
     }
-    setIsModalOpen(false);
-    setEditingItem(null);
   };
 
   return (

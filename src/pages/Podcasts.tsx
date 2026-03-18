@@ -29,55 +29,42 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 
-const PODCASTS = [
-  {
-    id: '1',
-    title: 'Café da Manhã',
-    author: 'Folha de S.Paulo',
-    description: 'O podcast de notícias mais importante do dia, com análises profundas sobre os temas atuais.',
-    image: 'https://picsum.photos/seed/podcast1/400',
-    category: 'Notícias',
-    duration: '25 min'
-  },
-  {
-    id: '2',
-    title: 'Flow Podcast',
-    author: 'Estúdios Flow',
-    description: 'Conversas descontraídas com as personalidades mais influentes do Brasil e do mundo.',
-    image: 'https://picsum.photos/seed/podcast2/400',
-    category: 'Entretenimento',
-    duration: '180 min'
-  },
-  {
-    id: '3',
-    title: 'NerdCast',
-    author: 'Jovem Nerd',
-    description: 'O mundo geek, ciência, história e cultura pop discutidos com muito humor.',
-    image: 'https://picsum.photos/seed/podcast3/400',
-    category: 'Cultura Pop',
-    duration: '90 min'
-  },
-  {
-    id: '4',
-    title: 'O Assunto',
-    author: 'G1',
-    description: 'Natuzza Nery conversa com especialistas para explicar o que é mais relevante no Brasil.',
-    image: 'https://picsum.photos/seed/podcast4/400',
-    category: 'Política',
-    duration: '30 min'
-  }
-];
-
 export default function Podcasts() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [podcasts, setPodcasts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPodcast, setSelectedPodcast] = useState<any>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAdmin(!!session);
     });
+    fetchPodcasts();
   }, []);
+
+  async function fetchPodcasts() {
+    try {
+      const { data, error } = await supabase
+        .from('podcasts')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setPodcasts(data || []);
+    } catch (error) {
+      console.error('Error fetching podcasts:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const filteredPodcasts = podcasts.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="bg-[#0b0e14] text-gray-100 font-display min-h-screen flex flex-col overflow-x-hidden">
@@ -233,19 +220,25 @@ export default function Podcasts() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {PODCASTS.map((podcast, i) => (
+          {loading ? (
+            [...Array(4)].map((_, i) => (
+              <div key={i} className="glass-panel h-[400px] animate-pulse rounded-3xl bg-white/5" />
+            ))
+          ) : filteredPodcasts.map((podcast, i) => (
             <motion.div
               key={podcast.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
+              onClick={() => setSelectedPodcast(podcast)}
               className="glass-panel group cursor-pointer overflow-hidden rounded-3xl border border-white/5 hover:border-blue-500/30 transition-all"
             >
               <div className="relative aspect-square overflow-hidden">
                 <img 
-                  src={podcast.image} 
+                  src={podcast.image || `https://picsum.photos/seed/${podcast.title}/400`} 
                   alt={podcast.title}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <button className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
@@ -273,6 +266,93 @@ export default function Podcasts() {
             </motion.div>
           ))}
         </div>
+
+        {/* Podcast Player Modal */}
+        <AnimatePresence>
+          {selectedPodcast && (
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-4 md:p-8"
+            >
+              <div className="max-w-5xl w-full bg-[#0d1117] border border-white/10 rounded-[40px] shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh]">
+                <div className="w-full md:w-1/2 aspect-square md:aspect-auto relative overflow-hidden bg-black flex items-center justify-center">
+                  {selectedPodcast.media_url?.match(/\.(mp4|webm|ogg)$/i) || selectedPodcast.media_url?.includes('youtube.com') || selectedPodcast.media_url?.includes('vimeo.com') ? (
+                    <video 
+                      src={selectedPodcast.media_url} 
+                      controls 
+                      autoPlay
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="relative w-full h-full">
+                      <img 
+                        src={selectedPodcast.image || `https://picsum.photos/seed/${selectedPodcast.title}/800`} 
+                        alt={selectedPodcast.title} 
+                        className="w-full h-full object-cover opacity-50 blur-xl"
+                      />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-12">
+                        <img 
+                          src={selectedPodcast.image || `https://picsum.photos/seed/${selectedPodcast.title}/400`} 
+                          alt={selectedPodcast.title} 
+                          className="w-64 h-64 object-cover rounded-3xl shadow-2xl mb-8"
+                        />
+                        <audio 
+                          src={selectedPodcast.media_url} 
+                          controls 
+                          autoPlay
+                          className="w-full max-w-md"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex-1 p-8 md:p-12 flex flex-col overflow-y-auto custom-scrollbar">
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <span className="px-3 py-1 bg-blue-500/20 text-blue-400 text-[10px] font-black rounded-full uppercase tracking-widest mb-4 inline-block">
+                        {selectedPodcast.category}
+                      </span>
+                      <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none mb-2">{selectedPodcast.title}</h2>
+                      <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">{selectedPodcast.author}</p>
+                    </div>
+                    <button 
+                      onClick={() => setSelectedPodcast(null)}
+                      className="size-12 bg-white/5 rounded-full flex items-center justify-center hover:bg-white/10 transition-all"
+                    >
+                      <X className="size-6" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-6 mb-10 text-gray-500 text-xs font-bold uppercase tracking-widest">
+                    <span className="flex items-center gap-2"><Clock className="size-4 text-blue-500" /> {selectedPodcast.duration}</span>
+                    <span className="flex items-center gap-2"><Calendar className="size-4 text-blue-500" /> {new Date(selectedPodcast.created_at).toLocaleDateString()}</span>
+                  </div>
+
+                  <div className="prose prose-invert max-w-none mb-12">
+                    <p className="text-gray-400 leading-relaxed text-lg">
+                      {selectedPodcast.description}
+                    </p>
+                  </div>
+
+                  <div className="mt-auto pt-8 border-t border-white/5 flex items-center justify-between">
+                    <div className="flex gap-4">
+                      <button className="size-12 bg-white/5 rounded-full flex items-center justify-center hover:bg-white/10 transition-all">
+                        <Heart className="size-5" />
+                      </button>
+                      <button className="size-12 bg-white/5 rounded-full flex items-center justify-center hover:bg-white/10 transition-all">
+                        <Search className="size-5" />
+                      </button>
+                    </div>
+                    <button className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 transition-all shadow-xl shadow-blue-900/20">
+                      Compartilhar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Categories Section */}
         <section className="mt-24">
