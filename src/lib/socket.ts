@@ -2,7 +2,8 @@ import { io } from 'socket.io-client';
 
 // Use window.location.origin to ensure we connect to the same host
 // In AI Studio, this handles both the dev and shared URLs correctly.
-const socketUrl = typeof window !== 'undefined' ? window.location.origin : '';
+// For Vercel deployments, define VITE_SOCKET_URL to point to a backend that supports websockets (e.g. Render, Railway)
+const socketUrl = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 export const socket = io(socketUrl, {
   transports: ['websocket', 'polling'], // Prefer websocket for lower latency
