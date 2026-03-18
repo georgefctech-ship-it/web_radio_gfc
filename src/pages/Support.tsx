@@ -47,7 +47,7 @@ export default function Support() {
         <div className="grid md:grid-cols-3 gap-8 mb-20">
           {[
             { icon: MessageSquare, title: 'Chat ao Vivo', desc: 'Fale com nossa equipe em tempo real.', color: 'bg-blue-500/10 text-blue-500' },
-            { icon: Mail, title: 'E-mail', desc: 'Envie sua dúvida para suporte@radiogeorge.com', color: 'bg-primary/10 text-primary' },
+            { icon: Mail, title: 'E-mail', desc: 'Envie sua dúvida para suporte@radiogfc.com', color: 'bg-primary/10 text-primary' },
             { icon: Phone, title: 'Telefone', desc: 'Atendimento de segunda a sexta, das 9h às 18h.', color: 'bg-emerald-500/10 text-emerald-500' }
           ].map((item, i) => (
             <motion.div 
@@ -91,7 +91,7 @@ export default function Support() {
       </main>
 
       <footer className="py-10 border-t border-white/5 text-center">
-        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 Radio GeorgeFctech - Todos os direitos reservados</p>
+        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 RÁDIO GFC - Todos os direitos reservados</p>
       </footer>
     </div>
   );

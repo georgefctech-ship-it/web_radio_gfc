@@ -29,9 +29,9 @@ export default function AdminAuth() {
       <div className="max-w-md w-full glass-panel p-8 rounded-2xl border border-primary/30 shadow-2xl space-y-6">
         <div className="text-center space-y-2">
           <Globe className="size-12 text-primary mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-slate-100">Login Admin</h2>
+          <h2 className="text-2xl font-bold text-slate-100">Painel Administrativo</h2>
           <p className="text-slate-400 text-sm">
-            Insira suas credenciais para acessar o painel
+            RÁDIO GFC - Gestão de Estúdio
           </p>
         </div>
         
@@ -74,7 +74,7 @@ export default function AdminAuth() {
         </div>
       </div>
       <footer className="absolute bottom-0 w-full py-10 text-center">
-        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 Radio GeorgeFctech - Todos os direitos reservados</p>
+        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 RÁDIO GFC - Todos os direitos reservados</p>
       </footer>
     </div>
   );

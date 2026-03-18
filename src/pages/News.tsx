@@ -256,7 +256,7 @@ export default function News() {
       </AnimatePresence>
 
       <footer className="py-10 border-t border-white/5 text-center">
-        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 Radio GeorgeFctech - Todos os direitos reservados</p>
+        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 RÁDIO GFC - Todos os direitos reservados</p>
       </footer>
     </div>
   );

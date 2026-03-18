@@ -338,10 +338,19 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
-    });
   }
+
+  // Catch-all route for SPA - MUST be after all other routes
+  app.get("*", (req, res) => {
+    if (process.env.NODE_ENV !== "production") {
+      // In dev, Vite handles the SPA fallback via middleware, 
+      // but if it reaches here, we can redirect to root or let it 404.
+      // Actually, Vite's middleware should have caught it.
+      res.status(404).send("Page not found in development");
+    } else {
+      res.sendFile(path.join(__dirname, "dist", "index.html"));
+    }
+  });
 
   app.use((err: any, req: any, res: any, next: any) => {
     console.error("[Express Error Handler]", err);

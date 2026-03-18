@@ -8,6 +8,7 @@ import Podcasts from './pages/Podcasts';
 import News from './pages/News';
 import GuicheWeb from './pages/GuicheWeb';
 import Support from './pages/Support';
+import NotFound from './pages/NotFound';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
       <Route path="/news" element={<News />} />
       <Route path="/guiche-web" element={<GuicheWeb />} />
       <Route path="/support" element={<Support />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

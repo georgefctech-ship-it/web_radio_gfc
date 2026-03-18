@@ -133,7 +133,7 @@ export default function Podcasts() {
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-900/20">
                 <Radio className="size-6" />
               </div>
-              <span className="text-xl font-bold tracking-tight text-white">RadioWorld</span>
+              <span className="text-xl font-bold tracking-tight text-white uppercase">RÁDIO GFC</span>
             </Link>
             
             <div className="flex-1 max-w-2xl mx-12 hidden lg:block">
@@ -310,7 +310,7 @@ export default function Podcasts() {
           <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Facebook className="size-5" /></a>
           <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><Linkedin className="size-5" /></a>
         </div>
-        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 Radio GeorgeFctech - Todos os direitos reservados</p>
+        <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.2em]">© 2026 RÁDIO GFC - Todos os direitos reservados</p>
       </footer>
     </div>
   );

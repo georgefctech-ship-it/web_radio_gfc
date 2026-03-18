@@ -316,7 +316,7 @@ export default function RadioPlayer() {
 
           if (settings) {
             setBranding({
-              name: settings.name || 'Radio GeorgeFctech',
+              name: settings.name || 'RÁDIO GFC',
               logo: settings.logo || 'https://bcfckpzvbltnsryqbwif.supabase.co/storage/v1/object/public/meus_arquivos/logo-web-radio.png',
               maintenanceMode: settings.maintenance_mode || false
             });

@@ -99,7 +99,7 @@ export default function StationDetails() {
               <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-900/20">
                 <Radio className="size-6" />
               </div>
-              <span className="text-xl font-bold tracking-tight text-white">RadioWorld</span>
+              <span className="text-xl font-bold tracking-tight text-white uppercase">RÁDIO GFC</span>
             </Link>
             
             <div className="flex-1 max-w-2xl mx-12 hidden lg:block">

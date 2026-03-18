@@ -47,7 +47,7 @@ export const LiveStudio: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('Diga com voz empolgada: Rádio George F C Tech, a sua rádio na web!');
+  const [aiPrompt, setAiPrompt] = useState('Diga com voz empolgada: RÁDIO GFC, a sua rádio na web!');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [supabaseStatus, setSupabaseStatus] = useState<'connected' | 'error' | 'checking'>('checking');
   const [serverStatus, setServerStatus] = useState<'online' | 'offline' | 'connecting'>('connecting');

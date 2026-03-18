@@ -63,7 +63,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState({ stations: 0, favorites: 0, history: 0, online: 0 });
   const [loading, setLoading] = useState(true);
   const [branding, setBranding] = useState({ 
-    name: 'Radio GeorgeFctech', 
+    name: 'RÁDIO GFC', 
     logo: 'https://bcfckpzvbltnsryqbwif.supabase.co/storage/v1/object/public/meus_arquivos/logo-web-radio.png',
     adminName: 'George Fctech',
     adminPhoto: '',
@@ -146,7 +146,7 @@ export default function AdminDashboard() {
 
           if (settings) {
             setBranding({
-              name: settings.name || 'Radio GeorgeFctech',
+              name: settings.name || 'RÁDIO GFC',
               logo: settings.logo || 'https://bcfckpzvbltnsryqbwif.supabase.co/storage/v1/object/public/meus_arquivos/logo-web-radio.png',
               adminName: settings.admin_name || 'George Fctech',
               adminPhoto: settings.admin_photo || '',
@@ -238,9 +238,23 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="h-screen w-full bg-[#0F0F0F] flex flex-col items-center justify-center gap-4">
-        <div className="size-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-white font-bold uppercase tracking-widest text-xs">Carregando Dashboard...</p>
+      <div className="h-screen w-full bg-[#0F0F0F] flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="size-20 bg-primary/10 rounded-3xl flex items-center justify-center border border-primary/20">
+            <img 
+              src={branding.logo || "https://bcfckpzvbltnsryqbwif.supabase.co/storage/v1/object/public/meus_arquivos/logo-web-radio.png"} 
+              alt="Logo" 
+              className="size-12 object-contain"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <div className="absolute -inset-4 bg-primary/5 blur-2xl rounded-full" />
+          <div className="absolute -bottom-2 -right-2 size-6 border-2 border-primary border-t-transparent rounded-full animate-spin bg-[#0F0F0F]"></div>
+        </div>
+        <div className="text-center space-y-1">
+          <p className="text-white font-black uppercase tracking-[0.3em] text-[10px]">RÁDIO GFC</p>
+          <p className="text-gray-500 font-bold uppercase tracking-widest text-[8px]">Carregando Dashboard...</p>
+        </div>
       </div>
     );
   }
