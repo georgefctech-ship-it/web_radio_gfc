@@ -49,7 +49,11 @@ import {
   AtSign,
   Twitter,
   Music2,
-  Newspaper
+  Newspaper,
+  Map,
+  Ticket,
+  Mic2,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -101,6 +105,7 @@ export default function RadioPlayer() {
   const [isSavingStation, setIsSavingStation] = useState(false);
   const [editingStation, setEditingStation] = useState<RadioStation | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isNavMenuOpen, setIsNavMenuOpen] = useState(false);
   const [isMobilePlayerOpen, setIsMobilePlayerOpen] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [filter, setFilter] = useState<'todas' | 'favoritas'>('todas');
@@ -1376,6 +1381,15 @@ export default function RadioPlayer() {
             <Link to="/admin" className="p-2 text-gray-500 hover:text-white transition-colors">
               <User className="size-5" />
             </Link>
+            
+            {/* Mobile Menu Toggle */}
+            <button 
+              onClick={() => setIsNavMenuOpen(true)}
+              className="md:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-full border border-white/10"
+            >
+              <Menu className="size-5" />
+            </button>
+
             {isAdmin && (
               <button 
                 onClick={() => supabase.auth.signOut()}
@@ -1585,6 +1599,107 @@ export default function RadioPlayer() {
               </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isNavMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsNavMenuOpen(false)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] md:hidden"
+            />
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              className="fixed right-0 top-0 bottom-0 w-[85%] max-w-sm bg-[#0b0e14] z-[70] md:hidden flex flex-col border-l border-white/5"
+            >
+              <div className="p-6 flex items-center justify-between border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="size-8 bg-primary rounded-lg flex items-center justify-center">
+                    <Radio className="size-5 text-white" />
+                  </div>
+                  <span className="font-black uppercase tracking-tighter">Menu</span>
+                </div>
+                <button 
+                  onClick={() => setIsNavMenuOpen(false)}
+                  className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-full"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                {/* Mobile Search */}
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+                  <input 
+                    type="text" 
+                    placeholder="Pesquisar rádios..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-6 outline-none focus:border-primary/50 transition-all text-sm"
+                  />
+                </div>
+
+                {/* Navigation Links */}
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4 ml-2">Navegação</p>
+                  {[
+                    { to: '/', icon: Radio, label: 'Rádios', active: activeTab === 'explore' },
+                    { to: '/mapa', icon: Map, label: 'Mapa Interativo' },
+                    { to: '/chat', icon: MessageSquare, label: 'Chat da Galera' },
+                    { to: '/guiche', icon: Ticket, label: 'Guichê Web' },
+                    { to: '/podcasts', icon: Mic2, label: 'Podcasts' },
+                    { to: '/noticias', icon: Newspaper, label: 'Notícias' },
+                    { to: '/suporte', icon: HelpCircle, label: 'Suporte' },
+                  ].map((link) => (
+                    <Link
+                      key={link.label}
+                      to={link.to}
+                      onClick={() => setIsNavMenuOpen(false)}
+                      className={`flex items-center gap-4 p-4 rounded-2xl transition-all font-bold ${
+                        link.active ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <link.icon className="size-5" />
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+
+                {/* Quick Filters */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4 ml-2">Filtros Rápidos</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => { setFilter('todas'); setIsNavMenuOpen(false); }}
+                      className={`p-4 rounded-2xl border font-bold text-xs uppercase tracking-widest transition-all ${
+                        filter === 'todas' ? 'bg-primary/10 border-primary text-primary' : 'bg-white/5 border-white/5 text-gray-500'
+                      }`}
+                    >
+                      Todas
+                    </button>
+                    <button 
+                      onClick={() => { setFilter('favoritas'); setIsNavMenuOpen(false); }}
+                      className={`p-4 rounded-2xl border font-bold text-xs uppercase tracking-widest transition-all ${
+                        filter === 'favoritas' ? 'bg-red-500/10 border-red-500 text-red-500' : 'bg-white/5 border-white/5 text-gray-500'
+                      }`}
+                    >
+                      Favoritas
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 border-t border-white/5 text-center">
+                <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.3em]">© 2026 RÁDIO GFC</p>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
