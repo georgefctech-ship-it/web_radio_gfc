@@ -111,7 +111,7 @@ export default function RadioPlayer() {
   const [userVotes, setUserVotes] = useState<Record<string, 'like' | 'dislike' | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [mapsAuthError, setMapsAuthError] = useState(false);
-  const [dominantColor, setDominantColor] = useState<string>('#E11D48'); // Default primary color
+  const [dominantColor, setDominantColor] = useState<string>('#2563EB'); // Default primary color
   const [branding, setBranding] = useState({ 
     name: 'RÁDIO GFC', 
     logo: 'https://picsum.photos/seed/radio-gfc/800',
@@ -242,14 +242,14 @@ export default function RadioPlayer() {
           }
         } catch (e) {
           console.error("Error extracting color:", e);
-          setDominantColor('#E11D48');
+          setDominantColor('#2563EB');
         }
       };
       img.onerror = () => {
-        setDominantColor('#E11D48');
+        setDominantColor('#2563EB');
       };
     } else {
-      setDominantColor('#E11D48');
+      setDominantColor('#2563EB');
     }
   }, [currentStation]);
 
@@ -918,7 +918,7 @@ export default function RadioPlayer() {
               <motion.div 
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="absolute -top-3 left-1/2 -translate-x-1/2 bg-red-500 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-red-500/40 z-20"
+                className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg shadow-blue-600/40 z-20"
               >
                 <span className="size-1.5 bg-white rounded-full animate-pulse" />
                 <Mic className="size-3" />
@@ -977,9 +977,9 @@ export default function RadioPlayer() {
             </div>
 
             {isLive && (
-              <div className="mb-6 px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-2xl flex items-center gap-3 animate-pulse">
-                <div className="size-2 bg-red-500 rounded-full" />
-                <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">ESTÚDIO AO VIVO</span>
+              <div className="mb-6 px-4 py-2 bg-blue-600/20 border border-blue-600/30 rounded-2xl flex items-center gap-3 animate-pulse">
+                <div className="size-2 bg-blue-600 rounded-full" />
+                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">ESTÚDIO AO VIVO</span>
               </div>
             )}
             
@@ -1196,9 +1196,9 @@ export default function RadioPlayer() {
             </div>
 
             {isLive && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full animate-pulse">
-                <div className="size-1.5 bg-red-500 rounded-full" />
-                <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">LIVE</span>
+              <div className="flex items-center gap-2 px-3 py-1 bg-blue-600/10 border border-blue-600/20 rounded-full animate-pulse">
+                <div className="size-1.5 bg-blue-600 rounded-full" />
+                <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest">LIVE</span>
               </div>
             )}
 
