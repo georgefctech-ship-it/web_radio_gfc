@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { fetchLiveSessionState, LIVE_SESSION_ID } from '../lib/liveSession';
 import { radioService, type RadioStation } from '../services/radioService';
 import { GoogleMapView } from '../components/GoogleMapView';
 import { Chat } from '../components/Chat';
@@ -92,6 +93,7 @@ export default function RadioPlayer() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [onlineListeners, setOnlineListeners] = useState(0);
   const [broadcasterId, setBroadcasterId] = useState<string | null>(null);
+  const [liveBroadcasterName, setLiveBroadcasterName] = useState<string | null>(null);
   const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [socketError, setSocketError] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -465,6 +467,47 @@ export default function RadioPlayer() {
 
     fetchInitialData();
 
+    const syncLiveState = (liveStatus: boolean, broadcasterName?: string | null) => {
+      setIsLive(liveStatus);
+      setLiveBroadcasterName(broadcasterName || null);
+      setBroadcasterId(broadcasterName || null);
+
+      if (!liveStatus && !isVignettePlaying) {
+        setLiveStream(null);
+        setLatency(null);
+        peerConnection.current?.close();
+        peerConnection.current = null;
+      }
+    };
+
+    fetchLiveSessionState()
+      .then((session) => {
+        if (session) {
+          syncLiveState(session.is_live, session.broadcaster_name);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Player] Could not restore live session state:', err);
+      });
+
+    const liveSessionChannel = supabase
+      .channel('live-session-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'live_sessions',
+          filter: `id=eq.${LIVE_SESSION_ID}`,
+        },
+        (payload) => {
+          const nextRow = (payload.new || payload.old) as { is_live?: boolean; broadcaster_name?: string | null } | null;
+          if (!nextRow) return;
+          syncLiveState(!!nextRow.is_live, nextRow.broadcaster_name ?? null);
+        }
+      )
+      .subscribe();
+
     console.log("[Player] Socket status:", socket.connected ? "Connected" : "Disconnected");
     setSocketStatus(socket.connected ? 'connected' : 'connecting');
     
@@ -497,14 +540,7 @@ export default function RadioPlayer() {
     socket.emit('listeners:request');
     
     socket.on('live:status', ({ isLive: liveStatus, broadcasterId: bId }) => {
-      setIsLive(liveStatus);
-      setBroadcasterId(bId);
-      if (!liveStatus && !isVignettePlaying) {
-        setLiveStream(null);
-        setLatency(null);
-        peerConnection.current?.close();
-        peerConnection.current = null;
-      }
+      syncLiveState(liveStatus, bId);
     });
 
     socket.on('vignette:start', (data?: { url?: string }) => {
@@ -605,6 +641,7 @@ export default function RadioPlayer() {
       socket.off('webrtc:offer');
       socket.off('webrtc:ice-candidate');
       socket.off('webrtc:broadcast-ready');
+      supabase.removeChannel(liveSessionChannel);
       clearInterval(latencyInterval);
     };
   }, []);
@@ -984,7 +1021,9 @@ export default function RadioPlayer() {
             {isLive && (
               <div className="mb-6 px-4 py-2 bg-blue-600/20 border border-blue-600/30 rounded-2xl flex items-center gap-3 animate-pulse">
                 <div className="size-2 bg-blue-600 rounded-full" />
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">ESTÚDIO AO VIVO</span>
+                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                  {liveBroadcasterName ? `${liveBroadcasterName} ao vivo` : 'Estúdio ao vivo'}
+                </span>
               </div>
             )}
             
@@ -1334,7 +1373,7 @@ export default function RadioPlayer() {
               }`}>
                 <div className={`size-2 rounded-full animate-pulse ${isVignettePlaying ? 'bg-primary' : 'bg-red-500'}`} />
                 <span className="text-xs font-black uppercase tracking-widest">
-                  {isVignettePlaying ? 'Vinheta no Ar' : 'Estúdio ao Vivo'}
+                  {isVignettePlaying ? 'Vinheta no Ar' : (liveBroadcasterName ? `${liveBroadcasterName} ao vivo` : 'Estúdio ao Vivo')}
                 </span>
               </div>
             </motion.div>

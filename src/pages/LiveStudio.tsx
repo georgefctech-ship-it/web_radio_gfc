@@ -8,6 +8,7 @@ import { VUMeter } from '../components/VUMeter';
 import { vignetteService, type Vignette } from '../services/vignetteService';
 import { usePlayer } from '../context/PlayerContext';
 import { supabase } from '../lib/supabase';
+import { DEFAULT_BROADCASTER_NAME, updateLiveSessionState } from '../lib/liveSession';
 import { GoogleGenAI, Modality } from "@google/genai";
 
 export const LiveStudio: React.FC = () => {
@@ -44,6 +45,7 @@ export const LiveStudio: React.FC = () => {
   const [vignetteToDelete, setVignetteToDelete] = useState<string | null>(null);
   const [editingVignette, setEditingVignette] = useState<Vignette | null>(null);
   const [vignetteForm, setVignetteForm] = useState({ name: '', url: '' });
+  const [vignetteFile, setVignetteFile] = useState<File | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
@@ -54,6 +56,7 @@ export const LiveStudio: React.FC = () => {
   const [serverLatency, setServerLatency] = useState<number | null>(null);
   const [sessionHistory, setSessionHistory] = useState<{ id: string, time: string, event: string, type: 'info' | 'success' | 'warning' | 'error' }[]>([]);
   const [peerStats, setPeerStats] = useState<Record<string, { latency: number, status: string }>>({});
+  const broadcasterName = DEFAULT_BROADCASTER_NAME;
 
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
 
@@ -80,12 +83,13 @@ export const LiveStudio: React.FC = () => {
     setIsVignetteMuted(isVignettePlaying);
   }, [isVignettePlaying, setIsVignetteMuted]);
 
+  const loadVignettes = async () => {
+    const data = await vignetteService.getAll();
+    setVignettes(data);
+  };
+
   // Load Vignettes
   useEffect(() => {
-    const loadVignettes = async () => {
-      const data = await vignetteService.getAll();
-      setVignettes(data);
-    };
     loadVignettes();
   }, []);
 
@@ -339,6 +343,7 @@ export const LiveStudio: React.FC = () => {
         }
         
         socket.emit('live:start');
+        await updateLiveSessionState(true, broadcasterName);
         setIsOnAir(true);
         setStatusMessage({ type: 'success', text: 'Você está no ar! Fale agora.' });
         setTimeout(() => setStatusMessage(null), 3000);
@@ -348,6 +353,7 @@ export const LiveStudio: React.FC = () => {
       }
     } else {
       socket.emit('live:stop');
+      await updateLiveSessionState(false, broadcasterName);
       setIsOnAir(false);
       
       // Stop mic when stopping broadcast (optional, but cleaner)
@@ -407,19 +413,31 @@ export const LiveStudio: React.FC = () => {
   const handleSaveVignette = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingVignette) {
-      const updated = await vignetteService.update(editingVignette.id, vignetteForm);
+      const updated = await vignetteService.update(editingVignette.id, { ...vignetteForm, path: editingVignette.path });
       if (updated) {
-        setVignettes(vignettes.map(v => v.id === updated.id ? updated : v));
+        await loadVignettes();
       }
     } else {
-      const created = await vignetteService.create(vignetteForm);
-      if (created) {
-        setVignettes([...vignettes, created]);
+      if (vignetteFile) {
+        const uploaded = await vignetteService.upload(vignetteFile, vignetteForm.name);
+        if (uploaded) {
+          await loadVignettes();
+        }
+      } else if (!vignetteForm.url.trim()) {
+        setStatusMessage({ type: 'error', text: 'Selecione um Ã¡udio do computador ou informe uma URL.' });
+        setTimeout(() => setStatusMessage(null), 3000);
+        return;
+      } else {
+        const created = await vignetteService.create(vignetteForm);
+        if (created) {
+          setVignettes([...vignettes, created]);
+        }
       }
     }
     setIsVignetteFormOpen(false);
     setEditingVignette(null);
     setVignetteForm({ name: '', url: '' });
+    setVignetteFile(null);
   };
 
   const handleDeleteVignette = async (id: string) => {
@@ -429,7 +447,8 @@ export const LiveStudio: React.FC = () => {
 
   const confirmDeleteVignette = async () => {
     if (!vignetteToDelete) return;
-    const success = await vignetteService.delete(vignetteToDelete);
+    const selectedVignette = vignettes.find(v => v.id === vignetteToDelete);
+    const success = await vignetteService.delete(vignetteToDelete, selectedVignette?.path);
     if (success) {
       setVignettes(vignettes.filter(v => v.id !== vignetteToDelete));
       setStatusMessage({ type: 'success', text: 'Vinheta excluída!' });
@@ -828,6 +847,7 @@ export const LiveStudio: React.FC = () => {
                     onClick={() => {
                       setEditingVignette(null);
                       setVignetteForm({ name: '', url: '' });
+                      setVignetteFile(null);
                       setIsVignetteFormOpen(true);
                     }}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
@@ -865,6 +885,7 @@ export const LiveStudio: React.FC = () => {
                           e.stopPropagation();
                           setEditingVignette(v);
                           setVignetteForm({ name: v.name, url: v.url });
+                          setVignetteFile(null);
                           setIsVignetteFormOpen(true);
                         }}
                         className="p-1.5 bg-black/80 rounded-lg text-gray-400 hover:text-white"
@@ -1148,11 +1169,30 @@ export const LiveStudio: React.FC = () => {
                     placeholder="Ex: Vinheta Abertura"
                   />
                 </div>
+                {!editingVignette && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Upload para o Bucket</label>
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setVignetteFile(file);
+                        if (file && !vignetteForm.name) {
+                          setVignetteForm({ ...vignetteForm, name: file.name.replace(/\.[^.]+$/, '') });
+                        }
+                      }}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors file:mr-4 file:border-0 file:bg-primary/10 file:px-4 file:py-2 file:text-xs file:font-black file:uppercase file:tracking-widest file:text-primary"
+                    />
+                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                      Envie o Ã¡udio para o bucket <code className="bg-white/5 px-1 py-0.5 rounded">vinhetas</code>. A URL abaixo fica como fallback opcional.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">URL do Áudio (MP3)</label>
                   <input 
                     type="url" 
-                    required
                     value={vignetteForm.url}
                     onChange={(e) => setVignetteForm({ ...vignetteForm, url: e.target.value })}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
@@ -1161,7 +1201,8 @@ export const LiveStudio: React.FC = () => {
                 </div>
                 <button 
                   type="submit"
-                  className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
+                  disabled={!editingVignette && !vignetteFile && !vignetteForm.url}
+                  className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Salvar Vinheta
                 </button>
