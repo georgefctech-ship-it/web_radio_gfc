@@ -4,17 +4,28 @@ import { io } from 'socket.io-client';
 // In AI Studio, this handles both the dev and shared URLs correctly.
 // For Vercel deployments, define VITE_SOCKET_URL to point to a backend that supports websockets (e.g. Render, Railway)
 const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
-const socketUrl = import.meta.env.VITE_SOCKET_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+const rawSocketUrl = import.meta.env.VITE_SOCKET_URL || '';
+const isPlaceholder = rawSocketUrl.includes('sua-url-do-render') || 
+                      rawSocketUrl.includes('your-url') || 
+                      rawSocketUrl === '' || 
+                      rawSocketUrl === 'undefined' ||
+                      rawSocketUrl === 'null';
 
-console.log("[Socket] Initializing with URL:", socketUrl);
+const socketUrl = isPlaceholder ? (typeof window !== 'undefined' ? window.location.origin : '') : rawSocketUrl;
+
+console.log("[Socket] Initializing...");
+console.log("[Socket] Raw URL from env:", rawSocketUrl);
+console.log("[Socket] Is Placeholder:", isPlaceholder);
+console.log("[Socket] Final URL used:", socketUrl);
+console.log("[Socket] Origin:", typeof window !== 'undefined' ? window.location.origin : 'N/A');
 
 export const socket = io(socketUrl, {
   path: '/socket.io/',
   transports: ['websocket'],
-  upgrade: false, // Don't even try to upgrade from polling
-  reconnectionAttempts: 10,
-  reconnectionDelay: 1000,
-  timeout: 20000,
+  upgrade: false,
+  reconnectionAttempts: 15, // Increased attempts
+  reconnectionDelay: 2000, // Increased delay
+  timeout: 30000, // Increased timeout
   autoConnect: true,
   forceNew: true,
 });

@@ -10,8 +10,10 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const isListeningIntentRef = useRef(false);
+  const isActuallyListeningRef = useRef(false);
   const isStartingRef = useRef(false);
   const onCommandRef = useRef(onCommand);
+  const lastRestartTimeRef = useRef(0);
 
   // Keep onCommand ref up to date
   useEffect(() => {
@@ -27,8 +29,6 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
     }
 
     const recognition = new SpeechRecognition();
-    // Use continuous = false for more predictable behavior on mobile
-    // We handle the restart manually in onend
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.lang = language;
@@ -36,6 +36,7 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
     recognition.onstart = () => {
       console.log('[VoiceControl] Started');
       setIsListening(true);
+      isActuallyListeningRef.current = true;
       isStartingRef.current = false;
       setError(null);
     };
@@ -47,13 +48,11 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
 
       const cmd = onCommandRef.current;
       
-      // Helper for matching keywords within the transcript
       const isMatch = (keywords: string[]) => {
         const words = text.split(/\s+/);
         return keywords.some(k => words.includes(k));
       };
 
-      // Improved command matching with more synonyms and stricter checks
       if (text.includes('toque') || text.includes('tocar') || text.includes('sintonizar') || text.includes('tune to') || text.includes('coloca na') || text.includes('mudar para')) {
         const stationName = text.replace(/toque|tocar|sintonizar|tune to|rádio|radio|coloca na|mudar para/g, '').trim();
         if (stationName) cmd('play_station', stationName);
@@ -64,7 +63,6 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
       } else if (isMatch(['mute', 'mudo', 'silêncio', 'silent', 'desativar som', 'sem som'])) {
         cmd('mute');
       } else if (isMatch(['play', 'tocar', 'iniciar', 'start', 'continuar', 'ligar'])) {
-        // Only trigger 'play' if it's not a 'play_station' command
         if (!text.includes('toque') && !text.includes('tocar ') && !text.includes('coloca na')) {
           cmd('play');
         }
@@ -101,35 +99,34 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
     recognition.onend = () => {
       console.log('[VoiceControl] Ended');
       isStartingRef.current = false;
+      isActuallyListeningRef.current = false;
+      setIsListening(false);
       
-      // Auto-restart if the user still wants to listen
       if (isListeningIntentRef.current) {
+        const now = Date.now();
+        // Prevent restarting more than once every 1.5 seconds
+        if (now - lastRestartTimeRef.current < 1500) {
+          console.log('[VoiceControl] Restart throttled');
+          setTimeout(() => {
+            if (isListeningIntentRef.current) recognition.onend();
+          }, 1000);
+          return;
+        }
+
         console.log('[VoiceControl] Auto-restarting...');
+        lastRestartTimeRef.current = now;
+        
         setTimeout(() => {
-          if (isListeningIntentRef.current && !isStartingRef.current) {
+          if (isListeningIntentRef.current && !isStartingRef.current && !isActuallyListeningRef.current) {
             try {
               isStartingRef.current = true;
               recognition.start();
             } catch (e) {
               console.error('[VoiceControl] Failed to restart:', e);
               isStartingRef.current = false;
-              // Try again after a longer delay if it failed
-              setTimeout(() => {
-                if (isListeningIntentRef.current && !isStartingRef.current) {
-                  try {
-                    isStartingRef.current = true;
-                    recognition.start();
-                  } catch (err) {
-                    console.error('[VoiceControl] Final restart attempt failed:', err);
-                    isStartingRef.current = false;
-                  }
-                }
-              }, 1000);
             }
           }
-        }, 600); 
-      } else {
-        setIsListening(false);
+        }, 800); 
       }
     };
 
@@ -147,6 +144,7 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
     if (!recognitionRef.current) return;
 
     if (isListeningIntentRef.current) {
+      console.log('[VoiceControl] Stopping listening intent...');
       isListeningIntentRef.current = false;
       setIsListening(false);
       isStartingRef.current = false;
@@ -154,8 +152,9 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
         recognitionRef.current.stop();
       } catch (e) {}
     } else {
+      console.log('[VoiceControl] Starting listening intent...');
       isListeningIntentRef.current = true;
-      if (!isStartingRef.current) {
+      if (!isStartingRef.current && !isActuallyListeningRef.current) {
         try {
           isStartingRef.current = true;
           recognitionRef.current.start();
