@@ -21,12 +21,13 @@ console.log("[Socket] Origin:", typeof window !== 'undefined' ? window.location.
 
 export const socket = io(socketUrl, {
   path: '/socket.io/',
-  transports: ['websocket', 'polling'], // Allow both for better mobile compatibility
+  transports: ['polling', 'websocket'], // Try polling first for maximum compatibility, matching server
   upgrade: true, // Allow upgrading from polling to websocket
-  reconnectionAttempts: 20, // Increased attempts
-  reconnectionDelay: 3000, // Increased delay
-  reconnectionDelayMax: 10000, // Max delay between attempts
-  timeout: 45000, // Increased timeout
+  reconnection: true,
+  reconnectionAttempts: Infinity, // Keep trying forever
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 20000,
   autoConnect: true,
   forceNew: true,
 });
@@ -43,16 +44,19 @@ socket.on('connect_error', (err) => {
     context: (err as any).context,
     type: err.name
   });
-  console.log("[Socket] Current transports config:", socket.io.opts.transports);
+  
+  // If websocket fails, it will automatically try polling if it's in the list
+  // but we already put polling first now.
 });
 
 socket.on('disconnect', (reason) => {
   console.warn("[Socket] Disconnected:", reason);
-  if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'ping timeout') {
-    // Reconnect manually if server disconnected us or transport closed unexpectedly
+  if (reason === 'io server disconnect' || reason === 'transport close' || reason === 'ping timeout' || reason === 'transport error') {
     console.log("[Socket] Attempting manual reconnection...");
     setTimeout(() => {
-      socket.connect();
+      if (!socket.connected) {
+        socket.connect();
+      }
     }, 1000);
   }
 });

@@ -94,6 +94,10 @@ export default function RadioPlayer() {
   const [onlineListeners, setOnlineListeners] = useState(0);
   const [broadcasterId, setBroadcasterId] = useState<string | null>(null);
   const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+  const socketStatusRef = useRef(socketStatus);
+  useEffect(() => {
+    socketStatusRef.current = socketStatus;
+  }, [socketStatus]);
   const [socketError, setSocketError] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [isLiveAudioPlaying, setIsLiveAudioPlaying] = useState(false);
@@ -539,40 +543,43 @@ export default function RadioPlayer() {
       })
       .subscribe();
 
-    socket.on('connect', () => {
+    // Ensure socket is connected
+    if (!socket.connected) {
+      console.log("[Player] Socket not connected, attempting to connect...");
+      socket.connect();
+    }
+    
+    const onConnect = () => {
       console.log("[Player] Socket conectado:", socket.id);
       setSocketStatus('connected');
       setSocketError(null);
-    });
+    };
     
-    socket.on('disconnect', (reason) => {
+    const onDisconnect = (reason: string) => {
       console.warn("[Player] Socket desconectado:", reason);
       setSocketStatus('disconnected');
       if (reason === 'io server disconnect') {
         socket.connect();
       }
-    });
+    };
 
-    socket.on('connect_error', (err) => {
+    const onConnectError = (err: any) => {
       console.error("[Player] Socket connection error details:", {
         message: err.message,
-        description: (err as any).description,
-        context: (err as any).context,
+        description: err.description,
+        context: err.context,
         type: err.name
       });
       setSocketStatus('disconnected');
       setSocketError(err.message);
-    });
+    };
 
-    socket.on('listeners:count', (count: number) => {
+    const onListenersCount = (count: number) => {
       console.log("[Socket] Received listener count:", count);
       setOnlineListeners(count);
-    });
-    
-    // Request initial count
-    socket.emit('listeners:request');
-    
-    socket.on('live:status', ({ isLive: liveStatus, broadcasterId: bId }) => {
+    };
+
+    const onLiveStatus = ({ isLive: liveStatus, broadcasterId: bId }: any) => {
       setIsLive(liveStatus);
       setBroadcasterId(bId);
       if (!liveStatus && !isVignettePlaying) {
@@ -581,14 +588,13 @@ export default function RadioPlayer() {
         peerConnection.current?.close();
         peerConnection.current = null;
       }
-    });
+    };
 
-    socket.on('vignette:start', (data?: { url?: string }) => {
+    const onVignetteStart = (data?: { url?: string }) => {
       console.log("[Socket] Vignette START", data?.url);
       setIsVignettePlaying(true);
       if (data?.url) {
         setVignetteUrl(data.url);
-        // Fallback: If live audio is not playing, try to play vignette directly
         if (!isLiveAudioPlaying && vignetteAudioRef.current) {
           vignetteAudioRef.current.src = data.url;
           vignetteAudioRef.current.play().catch(err => {
@@ -596,9 +602,9 @@ export default function RadioPlayer() {
           });
         }
       }
-    });
+    };
     
-    socket.on('vignette:end', () => {
+    const onVignetteEnd = () => {
       console.log("[Socket] Vignette END");
       setIsVignettePlaying(false);
       setVignetteUrl(null);
@@ -606,9 +612,9 @@ export default function RadioPlayer() {
         vignetteAudioRef.current.pause();
         vignetteAudioRef.current.src = "";
       }
-    });
+    };
 
-    socket.on('webrtc:offer', async ({ fromId, offer }) => {
+    const onWebRTCOffer = async ({ fromId, offer }: any) => {
       console.log(`[Player] Recebida oferta WebRTC de ${fromId}`);
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -639,18 +645,44 @@ export default function RadioPlayer() {
         targetId: fromId,
         answer
       });
-    });
+    };
 
-    socket.on('webrtc:broadcast-ready', () => {
+    const onWebRTCBroadcastReady = () => {
       console.log("[Player] Broadcast is ready, requesting stream...");
       socket.emit('webrtc:request-stream');
-    });
+    };
 
-    socket.on('webrtc:ice-candidate', async ({ candidate }) => {
+    const onWebRTCIceCandidate = async ({ candidate }: any) => {
       if (peerConnection.current) {
-        await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await peerConnection.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error("[Player] Error adding received ice candidate", e);
+        }
       }
-    });
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+    socket.on('listeners:count', onListenersCount);
+    socket.on('live:status', onLiveStatus);
+    socket.on('vignette:start', onVignetteStart);
+    socket.on('vignette:end', onVignetteEnd);
+    socket.on('webrtc:offer', onWebRTCOffer);
+    socket.on('webrtc:broadcast-ready', onWebRTCBroadcastReady);
+    socket.on('webrtc:ice-candidate', onWebRTCIceCandidate);
+    
+    // Request initial count
+    socket.emit('listeners:request');
+
+    // Periodic connection check
+    const connectionCheckInterval = setInterval(() => {
+      if (!socket.connected && socketStatusRef.current !== 'connecting') {
+        console.log("[Player] Socket connection check failed, attempting to connect...");
+        socket.connect();
+      }
+    }, 10000);
 
     // Latency monitoring
     const latencyInterval = setInterval(async () => {
@@ -675,16 +707,20 @@ export default function RadioPlayer() {
 
     return () => {
       supabase.removeChannel(studioChannel);
-      socket.off('listeners:count');
-      socket.off('live:status');
-      socket.off('vignette:start');
-      socket.off('vignette:end');
-      socket.off('webrtc:offer');
-      socket.off('webrtc:ice-candidate');
-      socket.off('webrtc:broadcast-ready');
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
+      socket.off('listeners:count', onListenersCount);
+      socket.off('live:status', onLiveStatus);
+      socket.off('vignette:start', onVignetteStart);
+      socket.off('vignette:end', onVignetteEnd);
+      socket.off('webrtc:offer', onWebRTCOffer);
+      socket.off('webrtc:broadcast-ready', onWebRTCBroadcastReady);
+      socket.off('webrtc:ice-candidate', onWebRTCIceCandidate);
       clearInterval(latencyInterval);
+      clearInterval(connectionCheckInterval);
     };
-  }, [setIsLiveAudioPlaying, setLiveStream, isPlaying, setIsPlaying]);
+  }, [setIsLiveAudioPlaying, setLiveStream, isPlaying, setIsPlaying, isVignettePlaying, isLiveAudioPlaying]);
 
   // Ducking logic for live audio when vignette plays
   useEffect(() => {
@@ -1298,7 +1334,7 @@ export default function RadioPlayer() {
       <main className="flex-1 flex flex-col min-w-0 relative bg-bg-dark">
         {/* Connection Status Bar */}
         <AnimatePresence>
-          {socketStatus !== 'connected' && (
+          {socketStatus !== 'connected' && isAdmin && (
             <motion.div 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -1784,6 +1820,20 @@ export default function RadioPlayer() {
                 <span>Socket ID:</span>
                 <span className="text-white truncate max-w-[120px]">{socket.id || 'N/A'}</span>
               </div>
+              <div className="flex justify-between">
+                <span>Transport:</span>
+                <span className="text-white">{(socket as any).io?.engine?.transport?.name || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Socket URL:</span>
+                <span className="text-white truncate max-w-[120px]">{(socket as any).io?.uri || 'N/A'}</span>
+              </div>
+              {socketError && (
+                <div className="flex flex-col gap-1 pt-1">
+                  <span className="text-red-400">Socket Error:</span>
+                  <span className="text-red-500/80 break-words leading-tight">{socketError}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>Audio State:</span>
                 <span className={isPlaying ? 'text-green-500' : 'text-amber-500'}>{isPlaying ? 'PLAYING' : 'PAUSED'}</span>

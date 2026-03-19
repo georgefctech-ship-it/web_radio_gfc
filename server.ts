@@ -20,16 +20,29 @@ async function startServer() {
     const io = new Server(httpServer, {
       path: '/socket.io/',
       cors: {
-        origin: "*",
+        origin: (origin, callback) => {
+          // Allow all origins for now, but echo it back to support credentials
+          callback(null, origin || "*");
+        },
         methods: ["GET", "POST"],
         credentials: true
       },
-      transports: ['websocket', 'polling'], // Allow both for better mobile compatibility
+      transports: ['polling', 'websocket'], // Try polling first for maximum compatibility
       pingTimeout: 60000,
       pingInterval: 25000,
       connectTimeout: 45000,
-      allowEIO3: true, // Allow EIO3 for older clients if needed
-      maxHttpBufferSize: 1e8 // 100MB
+      allowEIO3: true,
+      maxHttpBufferSize: 1e8
+    });
+
+    // Add engine error logging
+    io.engine.on("connection_error", (err) => {
+      console.error("[Socket Engine] Connection Error:", {
+        req: err.req.url,
+        code: err.code,
+        message: err.message,
+        context: err.context
+      });
     });
 
   const PORT = 3000;
