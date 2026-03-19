@@ -14,13 +14,15 @@ interface Message {
 
 interface ChatProps {
   onClose?: () => void;
+  isAdmin?: boolean;
+  initialUserName?: string;
 }
 
-export function Chat({ onClose }: ChatProps) {
+export function Chat({ onClose, isAdmin, initialUserName }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [userName, setUserName] = useState('');
-  const [isJoined, setIsJoined] = useState(false);
+  const [userName, setUserName] = useState(initialUserName || '');
+  const [isJoined, setIsJoined] = useState(isAdmin || !!initialUserName);
   const [listeners, setListeners] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 

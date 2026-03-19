@@ -131,6 +131,13 @@ export default function RadioPlayer() {
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [liveInfo, setLiveInfo] = useState<{
+    title?: string;
+    whatsapp?: string;
+    instagram?: string;
+    program?: string;
+    presenter?: string;
+  } | null>(null);
   const [isVignettePlaying, setIsVignettePlaying] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -518,6 +525,13 @@ export default function RadioPlayer() {
         if (payload.acao === 'ENTRAR_NO_AR' && payload.streamUrl) {
           // Switch to live stream
           setLiveStream(payload.streamUrl);
+          setLiveInfo({
+            title: payload.title,
+            whatsapp: payload.whatsapp,
+            instagram: payload.instagram,
+            program: payload.program,
+            presenter: payload.presenter
+          });
           setIsLiveAudioPlaying(true);
           setIsLive(true);
           
@@ -539,6 +553,7 @@ export default function RadioPlayer() {
           setIsLiveAudioPlaying(false);
           setIsLive(false);
           setLiveStream(null);
+          setLiveInfo(null);
         }
       })
       .subscribe();
@@ -1083,6 +1098,42 @@ export default function RadioPlayer() {
                 Vinheta Ativa
               </motion.div>
             )}
+            <div className="flex flex-col items-center gap-1 mb-6">
+              <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tighter text-white leading-tight text-center drop-shadow-lg truncate w-full">
+                {isLive ? (liveInfo?.program || 'Estúdio ao Vivo') : (currentStation?.name || 'Rádio GFC')}
+              </h2>
+              <p className="text-white/60 text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-center truncate w-full">
+                {isLive ? (liveInfo?.presenter || 'Locutor GFC') : (currentStation?.tags || 'Sua rádio na web')}
+              </p>
+              
+              {isLive && (liveInfo?.whatsapp || liveInfo?.instagram) && (
+                <div className="flex items-center gap-4 mt-2">
+                  {liveInfo.whatsapp && (
+                    <a 
+                      href={`https://wa.me/${liveInfo.whatsapp}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white/80 hover:text-white transition-colors"
+                    >
+                      <MessageSquare className="size-3 text-emerald-400" />
+                      WhatsApp
+                    </a>
+                  )}
+                  {liveInfo.instagram && (
+                    <a 
+                      href={`https://instagram.com/${liveInfo.instagram.replace('@', '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white/80 hover:text-white transition-colors"
+                    >
+                      <Instagram className="size-3 text-pink-400" />
+                      Instagram
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="w-full flex items-center justify-between mb-4">
               <button 
                 onClick={() => {
@@ -1332,7 +1383,7 @@ export default function RadioPlayer() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 relative bg-bg-dark">
-        {/* Connection Status Bar */}
+        {/* Connection Status Bar - Visible only for admins/studio staff */}
         <AnimatePresence>
           {socketStatus !== 'connected' && isAdmin && (
             <motion.div 

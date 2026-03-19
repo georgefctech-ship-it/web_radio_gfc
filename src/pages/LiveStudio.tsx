@@ -6,6 +6,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAudioMixer } from '../hooks/useAudioMixer';
 import { VUMeter } from '../components/VUMeter';
 import { AudioVisualizer } from '../components/AudioVisualizer';
+import { Chat } from '../components/Chat';
 import { vignetteService, type Vignette } from '../services/vignetteService';
 import { usePlayer } from '../context/PlayerContext';
 import { supabase } from '../lib/supabase';
@@ -31,10 +32,21 @@ export const LiveStudio: React.FC = () => {
     toggleMonitoring,
     isMonitoring,
     isInitialized,
-    isVignettePlaying
+    isVignettePlaying,
+    crossfader,
+    setCrossfader,
+    isDucking,
+    setIsDucking
   } = useAudioMixer();
 
   const [isOnAir, setIsOnAir] = useState(false);
+  const [activeTab, setActiveTab] = useState<'diagnostics' | 'history' | 'listeners' | 'chat'>('chat');
+  const [streamUrl, setStreamUrl] = useState('https://shaincast.caster.fm:2199/tunein/georgefc.pls');
+  const [broadcastTitle, setBroadcastTitle] = useState('Rádio GFC - Ao Vivo');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [programName, setProgramName] = useState('Programa GFC');
+  const [presenterName, setPresenterName] = useState('George FC');
   const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [listeners, setListeners] = useState(0);
   const [latency, setLatency] = useState<number | null>(null);
@@ -355,7 +367,12 @@ export const LiveStudio: React.FC = () => {
               event: 'comando_estudio',
               payload: { 
                 acao: 'ENTRAR_NO_AR', 
-                streamUrl: 'https://shaincast.caster.fm:2199/tunein/georgefc.pls' // Example URL, should be configurable
+                streamUrl,
+                title: broadcastTitle,
+                whatsapp,
+                instagram,
+                program: programName,
+                presenter: presenterName
               }
             });
           }
@@ -681,6 +698,57 @@ export const LiveStudio: React.FC = () => {
 
       <main className="grid xl:grid-cols-[1fr_350px] gap-8">
         <div className="space-y-8">
+          {/* Broadcast Control (Cast) - Integrated at the top */}
+          <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-black uppercase tracking-widest text-primary">Controle de Transmissão (Cast)</h2>
+                <p className="text-[10px] text-gray-600 font-bold uppercase">Configurações globais do estúdio</p>
+              </div>
+              
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black uppercase tracking-widest text-gray-500">Título</label>
+                  <input 
+                    type="text" 
+                    value={broadcastTitle}
+                    onChange={(e) => setBroadcastTitle(e.target.value)}
+                    className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[10px] font-bold focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black uppercase tracking-widest text-gray-500">Programa</label>
+                  <input 
+                    type="text" 
+                    value={programName}
+                    onChange={(e) => setProgramName(e.target.value)}
+                    className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[10px] font-bold focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black uppercase tracking-widest text-gray-500">WhatsApp</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 5511999999999"
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[10px] font-bold focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[8px] font-black uppercase tracking-widest text-gray-500">Instagram</label>
+                  <input 
+                    type="text" 
+                    placeholder="@usuario"
+                    value={instagram}
+                    onChange={(e) => setInstagram(e.target.value)}
+                    className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[10px] font-bold focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Professional Mixing Desk Section */}
           <section className="bg-[#111] rounded-[40px] border border-white/10 p-4 sm:p-8 shadow-2xl relative overflow-hidden">
             {/* Background Texture for Desk */}
@@ -715,7 +783,7 @@ export const LiveStudio: React.FC = () => {
                 </div>
                 
                 {/* Channels Grid */}
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-12">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-6 sm:gap-8">
                   {/* Channel 1: Microphone */}
                   <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 transition-colors">
                     <div className="flex items-center justify-between">
@@ -740,9 +808,6 @@ export const LiveStudio: React.FC = () => {
                         <VUMeter analyser={getAnalyser('mic')} />
                       </div>
                       <div className="h-48 sm:h-64 flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5 relative">
-                        <div className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[8px] font-black uppercase tracking-[0.3em] text-gray-700 pointer-events-none">
-                          Fader Ganho
-                        </div>
                         <input 
                           type="range" 
                           min="0" 
@@ -760,47 +825,74 @@ export const LiveStudio: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Channel 2: Vignettes */}
+                  {/* Channel 2: Deck 1 */}
                   <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-[8px] font-black uppercase tracking-widest text-primary">CH 02</span>
-                        <span className="text-[12px] font-black uppercase text-white">Vinhetas</span>
+                        <span className="text-[12px] font-black uppercase text-white">Deck 1</span>
                       </div>
-                      <button 
-                        onClick={stopAllVignettes}
-                        disabled={!isVignettePlaying}
-                        className={`size-12 rounded-2xl flex items-center justify-center transition-all ${
-                          isVignettePlaying 
-                            ? 'bg-primary text-white shadow-lg shadow-primary/20' 
-                            : 'bg-white/5 text-gray-500 opacity-50'
-                        }`}
-                      >
-                        <Square className="size-5 fill-current" />
-                      </button>
+                      <div className="size-12 rounded-2xl flex items-center justify-center bg-white/5 text-gray-500">
+                        <Music2 className="size-6" />
+                      </div>
                     </div>
                     
                     <div className="flex-1 flex flex-row items-center gap-6 relative">
                       <div className="h-48 sm:h-64 w-12 bg-black/40 rounded-2xl p-2 flex flex-col items-center border border-white/5">
-                        <VUMeter analyser={getAnalyser('vignette')} />
+                        <VUMeter analyser={getAnalyser('deck1')} />
                       </div>
                       <div className="h-48 sm:h-64 flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5 relative">
-                        <div className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[8px] font-black uppercase tracking-[0.3em] text-gray-700 pointer-events-none">
-                          Fader Mix
+                        <div className="h-full w-full flex flex-col justify-center items-center gap-2">
+                          <div className="text-[8px] font-black text-gray-600 uppercase">Deck 1</div>
+                          <div className="flex-1 w-2 bg-white/5 rounded-full relative">
+                            <div 
+                              className="absolute bottom-0 w-full bg-primary rounded-full transition-all"
+                              style={{ height: `${Math.cos((crossfader + 1) * 0.5 * Math.PI / 2) * 100}%` }}
+                            />
+                          </div>
                         </div>
-                        <input 
-                          type="range" 
-                          min="0" 
-                          max="1.5" 
-                          step="0.01"
-                          value={vignetteVolume}
-                          onChange={(e) => updateVignetteVolume(parseFloat(e.target.value))}
-                          className="h-full appearance-none bg-white/5 w-3 rounded-full cursor-pointer accent-primary vertical-range"
-                        />
                       </div>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-mono text-primary font-bold">{Math.round(vignetteVolume * 100)}%</span>
+                      <span className="text-[10px] font-mono text-primary font-bold">
+                        {Math.round(Math.cos((crossfader + 1) * 0.5 * Math.PI / 2) * 100)}%
+                      </span>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-gray-600 mt-1">Nível</span>
+                    </div>
+                  </div>
+
+                  {/* Channel 3: Deck 2 */}
+                  <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-primary">CH 03</span>
+                        <span className="text-[12px] font-black uppercase text-white">Deck 2</span>
+                      </div>
+                      <div className="size-12 rounded-2xl flex items-center justify-center bg-white/5 text-gray-500">
+                        <Music2 className="size-6" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 flex flex-row items-center gap-6 relative">
+                      <div className="h-48 sm:h-64 w-12 bg-black/40 rounded-2xl p-2 flex flex-col items-center border border-white/5">
+                        <VUMeter analyser={getAnalyser('deck2')} />
+                      </div>
+                      <div className="h-48 sm:h-64 flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5 relative">
+                        <div className="h-full w-full flex flex-col justify-center items-center gap-2">
+                          <div className="text-[8px] font-black text-gray-600 uppercase">Deck 2</div>
+                          <div className="flex-1 w-2 bg-white/5 rounded-full relative">
+                            <div 
+                              className="absolute bottom-0 w-full bg-primary rounded-full transition-all"
+                              style={{ height: `${Math.sin((crossfader + 1) * 0.5 * Math.PI / 2) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-mono text-primary font-bold">
+                        {Math.round(Math.sin((crossfader + 1) * 0.5 * Math.PI / 2) * 100)}%
+                      </span>
                       <span className="text-[8px] font-black uppercase tracking-widest text-gray-600 mt-1">Nível</span>
                     </div>
                   </div>
@@ -822,9 +914,6 @@ export const LiveStudio: React.FC = () => {
                         <VUMeter analyser={getAnalyser('master')} />
                       </div>
                       <div className="h-48 sm:h-64 flex-1 bg-black/40 rounded-2xl p-4 flex flex-col items-center gap-4 border border-white/5 relative">
-                        <div className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[8px] font-black uppercase tracking-[0.3em] text-gray-700 pointer-events-none">
-                          Fader Master
-                        </div>
                         <input 
                           type="range" 
                           min="0" 
@@ -841,6 +930,40 @@ export const LiveStudio: React.FC = () => {
                       <span className="text-[8px] font-black uppercase tracking-widest text-gray-600 mt-1">Nível</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Crossfader Section */}
+              <div className="mt-12 flex flex-col items-center gap-4">
+                <div className="flex justify-between w-full max-w-md px-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Deck 1</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Crossfader</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Deck 2</span>
+                </div>
+                <div className="w-full max-w-md h-12 bg-black/60 rounded-full border border-white/10 p-2 flex items-center relative">
+                  <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/10" />
+                  <input 
+                    type="range" 
+                    min="-1" 
+                    max="1" 
+                    step="0.01"
+                    value={crossfader}
+                    onChange={(e) => setCrossfader(parseFloat(e.target.value))}
+                    className="w-full appearance-none bg-transparent cursor-pointer accent-primary h-2"
+                  />
+                </div>
+                <div className="flex items-center gap-6 mt-2">
+                  <button 
+                    onClick={() => setIsDucking(!isDucking)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${
+                      isDucking 
+                        ? 'bg-primary/20 border-primary text-primary' 
+                        : 'bg-white/5 border-white/10 text-gray-500'
+                    }`}
+                  >
+                    <div className={`size-1.5 rounded-full ${isDucking ? 'bg-primary' : 'bg-gray-700'}`} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Talkover (Ducking)</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -879,23 +1002,41 @@ export const LiveStudio: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                 {vignettes.map((v) => (
                   <div key={v.id} className="group relative">
-                    <button
-                      onClick={async () => {
-                        try {
-                          await playVignette(v.url);
-                        } catch (err: any) {
-                          setStatusMessage({ type: 'error', text: 'Erro ao tocar vinheta: ' + (err.message || 'Falha no áudio') });
-                          setTimeout(() => setStatusMessage(null), 3000);
-                        }
-                      }}
-                      className="w-full h-24 bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
-                    >
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary truncate pr-4">{v.name}</span>
-                      <div className="flex items-center justify-between">
-                        <Play className="size-4 text-primary fill-current opacity-50 group-hover:opacity-100" />
-                        <div className="size-1 bg-primary/20 rounded-full" />
-                      </div>
-                    </button>
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await playVignette(v.url, 'deck1');
+                          } catch (err: any) {
+                            setStatusMessage({ type: 'error', text: 'Erro ao tocar vinheta: ' + (err.message || 'Falha no áudio') });
+                            setTimeout(() => setStatusMessage(null), 3000);
+                          }
+                        }}
+                        className="w-full h-16 bg-black/40 border border-white/5 rounded-t-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
+                      >
+                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary truncate pr-4">{v.name}</span>
+                        <div className="flex items-center justify-between">
+                          <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
+                          <span className="text-[7px] font-black text-gray-600 uppercase">Deck 1</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await playVignette(v.url, 'deck2');
+                          } catch (err: any) {
+                            setStatusMessage({ type: 'error', text: 'Erro ao tocar vinheta: ' + (err.message || 'Falha no áudio') });
+                            setTimeout(() => setStatusMessage(null), 3000);
+                          }
+                        }}
+                        className="w-full h-16 bg-black/40 border border-white/5 rounded-b-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
+                      >
+                        <div className="flex items-center justify-between">
+                          <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
+                          <span className="text-[7px] font-black text-gray-600 uppercase">Deck 2</span>
+                        </div>
+                      </button>
+                    </div>
                     
                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
@@ -929,150 +1070,147 @@ export const LiveStudio: React.FC = () => {
                 )}
               </div>
             </section>
-
-            <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8 flex flex-col justify-between">
-              <div>
-                <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Monitoramento</h2>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-white/5">
-                    <span className="text-[10px] font-bold text-gray-400">LATÊNCIA</span>
-                    <span className={`text-xs font-mono ${latency && latency < 100 ? 'text-emerald-500' : latency && latency < 300 ? 'text-yellow-500' : 'text-red-500'}`}>
-                      {latency ? `~${latency}ms` : '---'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-white/5">
-                    <span className="text-[10px] font-bold text-gray-400">OUVINTES</span>
-                    <span className="text-xs font-mono text-primary">{Object.keys(peerConnections.current).length}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 pt-8 border-t border-white/5">
-                <div className="flex items-center gap-3 mb-4">
-                  <Settings className="size-4 text-gray-500" />
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Configurações</h3>
-                </div>
-                <p className="text-[10px] text-gray-500 leading-relaxed uppercase font-bold tracking-tight">
-                  O áudio é transmitido via WebRTC com codec OPUS em alta fidelidade. Certifique-se de estar em um ambiente silencioso.
-                </p>
-              </div>
-            </section>
           </div>
         </div>
 
-        {/* Right Sidebar - Tips & Extra Info */}
-        <aside className="hidden xl:flex flex-col gap-8">
-          <div className="bg-primary/10 rounded-[40px] border border-primary/20 p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="size-10 bg-primary rounded-2xl flex items-center justify-center">
-                <Mic className="size-5 text-white" />
-              </div>
-              <h2 className="text-sm font-black uppercase tracking-widest text-primary">Dicas de Locução</h2>
-            </div>
-            <ul className="space-y-4">
-              {[
-                "Mantenha o fader de voz entre 80% e 100%.",
-                "Use as vinhetas para pontuar transições.",
-                "O sistema reduz o volume da música ao falar.",
-                "Monitore o VU meter para evitar distorção."
-              ].map((tip, i) => (
-                <li key={i} className="flex gap-3 text-xs text-gray-400 leading-relaxed">
-                  <div className="size-1.5 bg-primary rounded-full mt-1.5 shrink-0" />
-                  {tip}
-                </li>
-              ))}
-            </ul>
+        {/* Right Sidebar - Tabs & Chat */}
+        <aside className="hidden xl:flex flex-col gap-6 h-[calc(100vh-160px)]">
+          <div className="bg-white/5 rounded-[40px] border border-white/10 p-2 flex gap-1">
+            {[
+              { id: 'chat', icon: <Users className="size-3" />, label: 'Chat' },
+              { id: 'listeners', icon: <Activity className="size-3" />, label: 'Ouvintes' },
+              { id: 'history', icon: <RefreshCw className="size-3" />, label: 'Histórico' },
+              { id: 'diagnostics', icon: <Settings className="size-3" />, label: 'Sistema' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                  activeTab === tab.id 
+                    ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                    : 'text-gray-500 hover:bg-white/5'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          <div className="bg-white/5 rounded-[40px] border border-white/10 p-8 flex-1 flex flex-col gap-8">
-            {/* Diagnósticos Section */}
-            <div className="bg-black/40 rounded-3xl p-6 border border-white/5 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40">Diagnósticos do Sistema</h3>
-                <div className="flex items-center gap-2">
-                  <div className={`size-1.5 rounded-full ${serverStatus === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                  <span className="text-[8px] font-bold uppercase text-white/60">Servidor: {serverStatus}</span>
+          <div className="flex-1 bg-white/5 rounded-[40px] border border-white/10 overflow-hidden flex flex-col">
+            {activeTab === 'chat' && (
+              <div className="flex-1 flex flex-col p-4">
+                <Chat isAdmin={true} initialUserName="Estúdio GFC" />
+              </div>
+            )}
+
+            {activeTab === 'listeners' && (
+              <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Monitor de Transmissão</h2>
+                <div className="space-y-3">
+                  {Object.entries(peerStats).length === 0 ? (
+                    <p className="text-[10px] text-gray-600 font-bold uppercase text-center py-12">Sem conexões ativas</p>
+                  ) : (
+                    Object.entries(peerStats).map(([id, stats]) => (
+                      <div key={id} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-mono text-gray-400">ID: {id.slice(0, 8)}</span>
+                          <span className={`text-[8px] font-black uppercase ${
+                            stats.status === 'connected' ? 'text-emerald-500' : 'text-amber-500'
+                          }`}>{stats.status}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] font-mono text-primary font-bold">{stats.latency}ms</span>
+                          <p className="text-[8px] text-gray-600 font-black uppercase">Latência</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  
+                  <button 
+                    onClick={forceReconnect}
+                    className="w-full mt-4 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="size-3" />
+                    Forçar Reconexão Geral
+                  </button>
                 </div>
               </div>
+            )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-black/40 p-3 rounded-xl border border-white/5">
-                  <p className="text-[8px] font-bold text-white/40 uppercase mb-1">Latência Servidor</p>
-                  <p className="text-sm font-black text-primary">{serverLatency ? `${serverLatency}ms` : '--'}</p>
-                </div>
-                <div className="bg-black/40 p-3 rounded-xl border border-white/5">
-                  <p className="text-[8px] font-bold text-white/40 uppercase mb-1">Banco de Dados</p>
-                  <p className={`text-sm font-black ${supabaseStatus === 'connected' ? 'text-emerald-500' : 'text-red-500'}`}>
-                    {supabaseStatus === 'connected' ? 'OK' : 'ERRO'}
-                  </p>
+            {activeTab === 'history' && (
+              <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Histórico de Sessão</h2>
+                <div className="space-y-4">
+                  {sessionHistory.length === 0 ? (
+                    <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center py-12">
+                      Nenhuma atividade registrada.
+                    </div>
+                  ) : (
+                    sessionHistory.map(item => (
+                      <div key={item.id} className="flex flex-col gap-1 p-3 bg-white/5 rounded-2xl border border-white/5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[8px] font-mono text-gray-500">{item.time}</span>
+                          <div className={`size-1.5 rounded-full ${
+                            item.type === 'success' ? 'bg-emerald-500' :
+                            item.type === 'error' ? 'bg-red-500' :
+                            item.type === 'warning' ? 'bg-amber-500' : 'bg-primary'
+                          }`} />
+                        </div>
+                        <p className="text-[10px] font-bold text-gray-300 uppercase leading-tight">{item.event}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
+            )}
 
-              {supabaseStatus === 'error' && (
-                <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <p className="text-[8px] text-red-400 font-medium leading-relaxed">
-                    Aviso: Erro ao conectar com Supabase. Verifique se a tabela 'vignettes' existe.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Histórico de Sessão</h2>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                {sessionHistory.length === 0 ? (
-                  <div className="text-[10px] font-bold text-gray-600 uppercase tracking-widest text-center py-12">
-                    Nenhuma atividade registrada nesta sessão.
+            {activeTab === 'diagnostics' && (
+              <div className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-8">
+                <div className="bg-black/40 rounded-3xl p-6 border border-white/5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-white/40">Diagnósticos</h3>
+                    <div className="flex items-center gap-2">
+                      <div className={`size-1.5 rounded-full ${serverStatus === 'online' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                      <span className="text-[8px] font-bold uppercase text-white/60">Servidor: {serverStatus}</span>
+                    </div>
                   </div>
-                ) : (
-                  sessionHistory.map(item => (
-                    <div key={item.id} className="flex flex-col gap-1 p-3 bg-white/5 rounded-2xl border border-white/5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[8px] font-mono text-gray-500">{item.time}</span>
-                        <div className={`size-1.5 rounded-full ${
-                          item.type === 'success' ? 'bg-emerald-500' :
-                          item.type === 'error' ? 'bg-red-500' :
-                          item.type === 'warning' ? 'bg-amber-500' : 'bg-primary'
-                        }`} />
-                      </div>
-                      <p className="text-[10px] font-bold text-gray-300 uppercase leading-tight">{item.event}</p>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                      <p className="text-[8px] font-bold text-white/40 uppercase mb-1">Latência</p>
+                      <p className="text-sm font-black text-primary">{serverLatency ? `${serverLatency}ms` : '--'}</p>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-            
-            <div className="mt-8 pt-8 border-t border-white/10">
-              <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-6">Monitor de Transmissão</h2>
-              <div className="space-y-3">
-                {Object.entries(peerStats).length === 0 ? (
-                  <p className="text-[10px] text-gray-600 font-bold uppercase text-center py-4">Sem conexões ativas</p>
-                ) : (
-                  Object.entries(peerStats).map(([id, stats]) => (
-                    <div key={id} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-mono text-gray-400">ID: {id.slice(0, 8)}</span>
-                        <span className={`text-[8px] font-black uppercase ${
-                          stats.status === 'connected' ? 'text-emerald-500' : 'text-amber-500'
-                        }`}>{stats.status}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] font-mono text-primary font-bold">{stats.latency}ms</span>
-                        <p className="text-[8px] text-gray-600 font-black uppercase">Latência</p>
-                      </div>
+                    <div className="bg-black/40 p-3 rounded-xl border border-white/5">
+                      <p className="text-[8px] font-bold text-white/40 uppercase mb-1">Database</p>
+                      <p className={`text-sm font-black ${supabaseStatus === 'connected' ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {supabaseStatus === 'connected' ? 'OK' : 'ERRO'}
+                      </p>
                     </div>
-                  ))
-                )}
-                
-                <button 
-                  onClick={forceReconnect}
-                  className="w-full mt-4 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className="size-3" />
-                  Forçar Reconexão Geral
-                </button>
+                  </div>
+                </div>
+
+                <div className="bg-primary/10 rounded-3xl border border-primary/20 p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Mic className="size-4 text-primary" />
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Dicas</h2>
+                  </div>
+                  <ul className="space-y-3">
+                    {[
+                      "Mantenha o fader de voz entre 80% e 100%.",
+                      "Use as vinhetas para pontuar transições.",
+                      "O sistema reduz o volume da música ao falar.",
+                      "Monitore o VU meter para evitar distorção."
+                    ].map((tip, i) => (
+                      <li key={i} className="flex gap-3 text-[10px] text-gray-400 leading-relaxed uppercase font-bold">
+                        <div className="size-1 bg-primary rounded-full mt-1.5 shrink-0" />
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </aside>
       </main>
