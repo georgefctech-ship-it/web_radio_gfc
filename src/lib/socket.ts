@@ -21,11 +21,12 @@ console.log("[Socket] Origin:", typeof window !== 'undefined' ? window.location.
 
 export const socket = io(socketUrl, {
   path: '/socket.io/',
-  transports: ['websocket'],
-  upgrade: false,
-  reconnectionAttempts: 15, // Increased attempts
-  reconnectionDelay: 2000, // Increased delay
-  timeout: 30000, // Increased timeout
+  transports: ['websocket', 'polling'], // Allow both for better mobile compatibility
+  upgrade: true, // Allow upgrading from polling to websocket
+  reconnectionAttempts: 20, // Increased attempts
+  reconnectionDelay: 3000, // Increased delay
+  reconnectionDelayMax: 10000, // Max delay between attempts
+  timeout: 45000, // Increased timeout
   autoConnect: true,
   forceNew: true,
 });

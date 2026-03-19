@@ -123,6 +123,7 @@ export default function RadioPlayer() {
     logo: 'https://picsum.photos/seed/radio-gfc/800',
     maintenanceMode: false
   });
+  const [logoClickCount, setLogoClickCount] = useState(0);
   const [isDriverMode, setIsDriverMode] = useState(false);
   const [lastVoiceCommand, setLastVoiceCommand] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
@@ -1074,7 +1075,18 @@ export default function RadioPlayer() {
             </div>
 
             <div className="w-full flex flex-col items-center justify-center mb-6">
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tighter uppercase text-white text-center drop-shadow-md mb-6">
+              <h1 
+                onClick={() => {
+                  setLogoClickCount(prev => {
+                    if (prev + 1 >= 5) {
+                      setShowDebug(!showDebug);
+                      return 0;
+                    }
+                    return prev + 1;
+                  });
+                }}
+                className="text-2xl sm:text-3xl font-black tracking-tighter uppercase text-white text-center drop-shadow-md mb-6 cursor-pointer select-none active:scale-95 transition-transform"
+              >
                 {branding.name}
               </h1>
               
@@ -1284,6 +1296,31 @@ export default function RadioPlayer() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 relative bg-bg-dark">
+        {/* Connection Status Bar */}
+        <AnimatePresence>
+          {socketStatus !== 'connected' && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className={`w-full ${socketStatus === 'connecting' ? 'bg-amber-500/20 text-amber-500' : 'bg-red-500/20 text-red-500'} px-6 py-2 flex items-center justify-center gap-3 border-b border-white/5 z-[60] backdrop-blur-md`}
+            >
+              <div className={`size-2 rounded-full ${socketStatus === 'connecting' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {socketStatus === 'connecting' ? 'Tentando conectar ao servidor...' : 'Sem conexão com o servidor de chat/estatísticas'}
+              </span>
+              {socketStatus === 'disconnected' && (
+                <button 
+                  onClick={() => socket.connect()}
+                  className="ml-4 px-3 py-1 bg-red-500 text-white rounded-full text-[8px] font-black uppercase tracking-widest hover:bg-red-600 transition-colors"
+                >
+                  Reconectar
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {error && (
           <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[100] bg-red-500/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl border border-red-400/20 shadow-2xl flex flex-col items-center gap-3">
             <div className="flex items-center gap-3">
@@ -1722,6 +1759,78 @@ export default function RadioPlayer() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+      {/* Debug Panel */}
+      <AnimatePresence>
+        {showDebug && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-24 right-6 z-[400] w-80 bg-black/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl p-6 font-mono text-[10px] space-y-4"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-primary font-black uppercase tracking-widest">Debug Console</h3>
+              <button onClick={() => setShowDebug(false)} className="text-gray-500 hover:text-white"><X className="size-4" /></button>
+            </div>
+            
+            <div className="space-y-2 text-gray-400">
+              <div className="flex justify-between">
+                <span>Socket Status:</span>
+                <span className={socketStatus === 'connected' ? 'text-green-500' : 'text-red-500'}>{socketStatus.toUpperCase()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Socket ID:</span>
+                <span className="text-white truncate max-w-[120px]">{socket.id || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Audio State:</span>
+                <span className={isPlaying ? 'text-green-500' : 'text-amber-500'}>{isPlaying ? 'PLAYING' : 'PAUSED'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>HLS Supported:</span>
+                <span className="text-white">{Hls.isSupported() ? 'YES' : 'NO'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Mobile Device:</span>
+                <span className="text-white">{/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'YES' : 'NO'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Network Type:</span>
+                <span className="text-white">{(navigator as any).connection?.effectiveType || 'UNKNOWN'}</span>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/5 space-y-2">
+              <button 
+                onClick={() => {
+                  console.log("[Debug] Forcing socket reconnect...");
+                  socket.disconnect().connect();
+                }}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all text-white uppercase font-bold"
+              >
+                Forçar Reconexão Socket
+              </button>
+              <button 
+                onClick={() => {
+                  console.log("[Debug] Forcing audio reload...");
+                  if (audioRef.current) {
+                    const src = audioRef.current.src;
+                    audioRef.current.src = "";
+                    setTimeout(() => {
+                      audioRef.current!.src = src;
+                      audioRef.current!.load();
+                      if (isPlaying) audioRef.current!.play();
+                    }, 500);
+                  }
+                }}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-all text-white uppercase font-bold"
+              >
+                Recarregar Áudio
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

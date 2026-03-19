@@ -24,11 +24,11 @@ async function startServer() {
         methods: ["GET", "POST"],
         credentials: true
       },
-      transports: ['websocket'], // Force websocket ONLY
+      transports: ['websocket', 'polling'], // Allow both for better mobile compatibility
       pingTimeout: 60000,
       pingInterval: 25000,
       connectTimeout: 45000,
-      allowEIO3: false, // Use EIO4
+      allowEIO3: true, // Allow EIO3 for older clients if needed
       maxHttpBufferSize: 1e8 // 100MB
     });
 

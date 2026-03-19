@@ -54,15 +54,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (Hls.isSupported()) {
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 60,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 600,
-          appendErrorMaxRetry: 5,
+          lowLatencyMode: false, // Better stability on mobile data
+          backBufferLength: 90,
+          maxBufferLength: 60,
+          maxMaxBufferLength: 1200,
+          appendErrorMaxRetry: 10,
+          manifestLoadingMaxRetry: 10,
+          levelLoadingMaxRetry: 10,
+          fragLoadingMaxRetry: 10,
         });
         hls.loadSource(currentStation.url_resolved);
         hls.attachMedia(audio);
         hlsRef.current = hls;
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.log("[Player] Fatal network error, trying to recover...");
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.log("[Player] Fatal media error, trying to recover...");
+                hls.recoverMediaError();
+                break;
+              default:
+                console.log("[Player] Unrecoverable error, destroying HLS instance");
+                hls.destroy();
+                break;
+            }
+          }
+        });
       } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
         audio.src = currentStation.url_resolved;
       }
@@ -221,7 +243,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         onError={(e) => {
           console.error("Audio element error:", e);
           if (currentStation && isPlaying) {
-            setIsPlaying(false);
+            // Try to reload the source once if it fails
+            const audio = audioRef.current;
+            if (audio && audio.src) {
+              console.log("[Player] Attempting to reload audio source...");
+              const currentSrc = audio.src;
+              audio.src = "";
+              setTimeout(() => {
+                audio.src = currentSrc;
+                audio.load();
+                if (isPlaying) audio.play().catch(() => setIsPlaying(false));
+              }, 1000);
+            } else {
+              setIsPlaying(false);
+            }
           }
         }}
       />
