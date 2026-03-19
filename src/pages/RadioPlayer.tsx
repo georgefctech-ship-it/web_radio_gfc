@@ -57,7 +57,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { fetchLiveSessionState, LIVE_SESSION_ID } from '../lib/liveSession';
+import { AudioVisualizer } from '../components/AudioVisualizer';
 import { radioService, type RadioStation } from '../services/radioService';
 import { GoogleMapView } from '../components/GoogleMapView';
 import { Chat } from '../components/Chat';
@@ -93,7 +93,6 @@ export default function RadioPlayer() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [onlineListeners, setOnlineListeners] = useState(0);
   const [broadcasterId, setBroadcasterId] = useState<string | null>(null);
-  const [liveBroadcasterName, setLiveBroadcasterName] = useState<string | null>(null);
   const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [socketError, setSocketError] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
@@ -149,6 +148,40 @@ export default function RadioPlayer() {
       (window as any).gm_authFailure = null;
     };
   }, []);
+
+  const [liveAnalyser, setLiveAnalyser] = useState<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+
+  // Initialize AudioContext for Visualizer
+  useEffect(() => {
+    if (isLiveAudioPlaying && liveAudioRef.current && !audioContextRef.current) {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const node = ctx.createAnalyser();
+      node.fftSize = 256;
+      
+      try {
+        const source = ctx.createMediaElementSource(liveAudioRef.current);
+        source.connect(node);
+        node.connect(ctx.destination);
+        
+        audioContextRef.current = ctx;
+        sourceNodeRef.current = source;
+        setLiveAnalyser(node);
+      } catch (err) {
+        console.warn("[Player] Error connecting audio to visualizer:", err);
+      }
+    }
+    
+    return () => {
+      if (!isLiveAudioPlaying && audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+        sourceNodeRef.current = null;
+        setLiveAnalyser(null);
+      }
+    };
+  }, [isLiveAudioPlaying]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -467,50 +500,44 @@ export default function RadioPlayer() {
 
     fetchInitialData();
 
-    const syncLiveState = (liveStatus: boolean, broadcasterName?: string | null) => {
-      setIsLive(liveStatus);
-      setLiveBroadcasterName(broadcasterName || null);
-      setBroadcasterId(broadcasterName || null);
-
-      if (!liveStatus && !isVignettePlaying) {
-        setLiveStream(null);
-        setLatency(null);
-        peerConnection.current?.close();
-        peerConnection.current = null;
-      }
-    };
-
-    fetchLiveSessionState()
-      .then((session) => {
-        if (session) {
-          syncLiveState(session.is_live, session.broadcaster_name);
-        }
-      })
-      .catch((err) => {
-        console.warn('[Player] Could not restore live session state:', err);
-      });
-
-    const liveSessionChannel = supabase
-      .channel('live-session-sync')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'live_sessions',
-          filter: `id=eq.${LIVE_SESSION_ID}`,
-        },
-        (payload) => {
-          const nextRow = (payload.new || payload.old) as { is_live?: boolean; broadcaster_name?: string | null } | null;
-          if (!nextRow) return;
-          syncLiveState(!!nextRow.is_live, nextRow.broadcaster_name ?? null);
-        }
-      )
-      .subscribe();
-
     console.log("[Player] Socket status:", socket.connected ? "Connected" : "Disconnected");
     setSocketStatus(socket.connected ? 'connected' : 'connecting');
     
+    // Supabase Realtime Listener for Studio Commands
+    const studioChannel = supabase.channel('radio-studio');
+    
+    studioChannel
+      .on('broadcast', { event: 'comando_estudio' }, ({ payload }) => {
+        console.log("[Player] Comando recebido do estúdio via Supabase:", payload);
+        
+        if (payload.acao === 'ENTRAR_NO_AR' && payload.streamUrl) {
+          // Switch to live stream
+          setLiveStream(payload.streamUrl);
+          setIsLiveAudioPlaying(true);
+          setIsLive(true);
+          
+          // If already playing something, pause it
+          if (isPlaying) {
+            setIsPlaying(false);
+          }
+          
+          // Show notification
+          const notification = document.createElement('div');
+          notification.className = 'fixed top-24 left-1/2 -translate-x-1/2 bg-red-600 text-white px-8 py-4 rounded-full font-black z-[100] animate-bounce shadow-2xl border-4 border-white flex items-center gap-3';
+          notification.innerHTML = '<span class="w-3 h-3 bg-white rounded-full animate-pulse"></span> 🔴 ESTAMOS AO VIVO AGORA!';
+          document.body.appendChild(notification);
+          setTimeout(() => {
+            notification.classList.add('opacity-0', 'transition-opacity', 'duration-1000');
+            setTimeout(() => notification.remove(), 1000);
+          }, 6000);
+        } else if (payload.acao === 'SAIR_DO_AR') {
+          setIsLiveAudioPlaying(false);
+          setIsLive(false);
+          setLiveStream(null);
+        }
+      })
+      .subscribe();
+
     socket.on('connect', () => {
       console.log("[Player] Socket conectado:", socket.id);
       setSocketStatus('connected');
@@ -526,7 +553,12 @@ export default function RadioPlayer() {
     });
 
     socket.on('connect_error', (err) => {
-      console.error("[Player] Erro na conexão do socket:", err);
+      console.error("[Player] Socket connection error details:", {
+        message: err.message,
+        description: (err as any).description,
+        context: (err as any).context,
+        type: err.name
+      });
       setSocketStatus('disconnected');
       setSocketError(err.message);
     });
@@ -540,7 +572,14 @@ export default function RadioPlayer() {
     socket.emit('listeners:request');
     
     socket.on('live:status', ({ isLive: liveStatus, broadcasterId: bId }) => {
-      syncLiveState(liveStatus, bId);
+      setIsLive(liveStatus);
+      setBroadcasterId(bId);
+      if (!liveStatus && !isVignettePlaying) {
+        setLiveStream(null);
+        setLatency(null);
+        peerConnection.current?.close();
+        peerConnection.current = null;
+      }
     });
 
     socket.on('vignette:start', (data?: { url?: string }) => {
@@ -634,6 +673,7 @@ export default function RadioPlayer() {
     }, 5000);
 
     return () => {
+      supabase.removeChannel(studioChannel);
       socket.off('listeners:count');
       socket.off('live:status');
       socket.off('vignette:start');
@@ -641,10 +681,20 @@ export default function RadioPlayer() {
       socket.off('webrtc:offer');
       socket.off('webrtc:ice-candidate');
       socket.off('webrtc:broadcast-ready');
-      supabase.removeChannel(liveSessionChannel);
       clearInterval(latencyInterval);
     };
-  }, []);
+  }, [setIsLiveAudioPlaying, setLiveStream, isPlaying, setIsPlaying]);
+
+  // Ducking logic for live audio when vignette plays
+  useEffect(() => {
+    if (liveAudioRef.current) {
+      if (isVignettePlaying) {
+        liveAudioRef.current.volume = 0.2; // Duck to 20%
+      } else {
+        liveAudioRef.current.volume = 1.0;
+      }
+    }
+  }, [isVignettePlaying]);
 
   // Request stream when live starts or vignette plays
   useEffect(() => {
@@ -658,7 +708,13 @@ export default function RadioPlayer() {
   useEffect(() => {
     if (liveStream && liveAudioRef.current) {
       const audio = liveAudioRef.current;
-      audio.srcObject = liveStream;
+      
+      if (liveStream instanceof MediaStream) {
+        audio.srcObject = liveStream;
+      } else if (typeof liveStream === 'string') {
+        audio.src = liveStream;
+        audio.srcObject = null;
+      }
       
       const playAudio = async () => {
         try {
@@ -1021,13 +1077,22 @@ export default function RadioPlayer() {
             {isLive && (
               <div className="mb-6 px-4 py-2 bg-blue-600/20 border border-blue-600/30 rounded-2xl flex items-center gap-3 animate-pulse">
                 <div className="size-2 bg-blue-600 rounded-full" />
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
-                  {liveBroadcasterName ? `${liveBroadcasterName} ao vivo` : 'Estúdio ao vivo'}
-                </span>
+                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">ESTÚDIO AO VIVO</span>
               </div>
             )}
             
             <div className="w-full max-w-[320px] sm:max-w-[440px] aspect-square rounded-3xl border-4 border-white/20 overflow-hidden shadow-2xl bg-black/40 mb-2 group relative">
+              {isLiveAudioPlaying && liveAnalyser ? (
+                <div className="absolute inset-0 z-20 bg-black/60 flex flex-col items-center justify-center p-8 backdrop-blur-sm">
+                  <div className="w-full h-48 mb-6">
+                    <AudioVisualizer analyser={liveAnalyser} />
+                  </div>
+                  <div className="flex items-center gap-3 bg-red-600 px-4 py-2 rounded-full border-2 border-white shadow-lg animate-pulse">
+                    <div className="size-2 bg-white rounded-full" />
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest">TRANSMISSÃO AO VIVO</span>
+                  </div>
+                </div>
+              ) : null}
               <img 
                 src={currentStation?.favicon || branding.logo} 
                 alt={currentStation?.name || branding.name} 
@@ -1268,10 +1333,10 @@ export default function RadioPlayer() {
               </button>
             ))}
             <div className="w-[1px] h-4 bg-white/10 mx-2" />
-            <div className="flex items-center gap-6">
-              <Link to="/guiche-web" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-colors">GUICHÊ WEB</Link>
-              <Link to="/podcasts" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-colors">PODCAST</Link>
-              <Link to="/news" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-colors">NOTICIA</Link>
+            <div className="flex items-center gap-8">
+              <Link to="/guiche-web" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/guiche-web' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>GUICHÊ WEB</Link>
+              <Link to="/podcasts" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/podcasts' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>PODCAST</Link>
+              <Link to="/news" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/news' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>NOTICIA</Link>
             </div>
           </nav>
 
@@ -1335,50 +1400,6 @@ export default function RadioPlayer() {
             </div>
           </div>
         </header>
-
-        {/* Live Stream Indicator Overlay */}
-        <AnimatePresence>
-          {(isLive || isVignettePlaying) && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="fixed bottom-32 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2"
-            >
-              {!isLiveAudioPlaying && audioError && (
-                <button 
-                  onClick={() => {
-                    if (liveAudioRef.current) {
-                      liveAudioRef.current.play()
-                        .then(() => {
-                          setIsLiveAudioPlaying(true);
-                          setAudioError(null);
-                        })
-                        .catch(err => {
-                          console.error("[Audio] Manual play failed:", err);
-                          setAudioError("Erro ao iniciar áudio. Clique novamente.");
-                        });
-                    }
-                  }}
-                  className="px-6 py-3 bg-primary text-white rounded-full text-[12px] font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border-2 border-white/20"
-                >
-                  <Play className="size-4 fill-current" />
-                  {audioError}
-                </button>
-              )}
-              <div className={`px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl backdrop-blur-md border ${
-                isVignettePlaying 
-                  ? 'bg-primary/20 border-primary/30 text-primary' 
-                  : 'bg-red-500/20 border-red-500/30 text-red-500'
-              }`}>
-                <div className={`size-2 rounded-full animate-pulse ${isVignettePlaying ? 'bg-primary' : 'bg-red-500'}`} />
-                <span className="text-xs font-black uppercase tracking-widest">
-                  {isVignettePlaying ? 'Vinheta no Ar' : (liveBroadcasterName ? `${liveBroadcasterName} ao vivo` : 'Estúdio ao Vivo')}
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-10">

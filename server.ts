@@ -11,61 +11,50 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PORT = Number(process.env.PORT || 3000);
-const rawAllowedOrigins = process.env.ALLOWED_ORIGINS || process.env.APP_URL || "*";
-const allowedOrigins = rawAllowedOrigins
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-const isOriginAllowed = (origin?: string) => {
-  if (!origin) return true;
-  if (allowedOrigins.includes("*")) return true;
-  return allowedOrigins.includes(origin);
-};
 
 async function startServer() {
+  console.log("[Server] Starting server...");
   const app = express();
-  app.use((req, res, next) => {
-    if (req.url.includes('socket.io')) {
-      console.log(`[Server] Socket.io request: ${req.method} ${req.url}`);
-    }
-    next();
-  });
-  app.use(cors({
-    origin(origin, callback) {
-      if (isOriginAllowed(origin || undefined)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`Origin not allowed by CORS: ${origin}`));
-    }
-  }));
+  app.use(cors()); // Enable CORS for all routes
   const httpServer = createServer(app);
-  const io = new Server(httpServer, {
-    cors: {
-      origin(origin, callback) {
-        if (isOriginAllowed(origin || undefined)) {
-          callback(null, true);
-          return;
-        }
-        callback(new Error(`Socket origin not allowed: ${origin}`));
+    const io = new Server(httpServer, {
+      path: '/socket.io/',
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"],
+        credentials: true
       },
-      methods: ["GET", "POST"],
-      credentials: true
-    },
-    allowEIO3: true,
-    pingTimeout: 60000,
-    pingInterval: 25000
-  });
+      transports: ['websocket'], // Force websocket ONLY
+      pingTimeout: 60000,
+      pingInterval: 25000,
+      connectTimeout: 45000,
+      allowEIO3: false, // Use EIO4
+      maxHttpBufferSize: 1e8 // 100MB
+    });
+
+  const PORT = 3000;
+
   // ... (Socket.io logic remains same)
   const messages: any[] = [];
   const stationVotes: Record<string, { likes: number, dislikes: number }> = {};
   let isLive = false;
   let liveBroadcasterId: string | null = null;
 
+  app.get("/api/socket-health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      clients: io.engine.clientsCount,
+      transports: Object.keys(io.engine.transports || {})
+    });
+  });
+
   io.on("connection", (socket) => {
     console.log(`[Socket] New connection: ${socket.id} (Total: ${io.engine.clientsCount})`);
+    console.log(`[Socket] Transport: ${socket.conn.transport.name} for ${socket.id}`);
+    
+    socket.conn.on("upgrade", () => {
+      console.log(`[Socket] Transport upgraded to ${socket.conn.transport.name} for ${socket.id}`);
+    });
     
     // Update listener count for everyone
     const currentCount = io.engine.clientsCount;
@@ -392,8 +381,7 @@ async function startServer() {
   });
 
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-    console.log(`[Server] Allowed origins: ${allowedOrigins.join(", ")}`);
+    console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 

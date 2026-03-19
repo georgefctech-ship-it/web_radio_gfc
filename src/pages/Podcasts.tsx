@@ -113,67 +113,68 @@ export default function Podcasts() {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="sticky top-0 z-50 glass-panel border-b border-white/5">
-        <div className="max-w-[1600px] mx-auto px-4 md:px-6">
-          <div className="flex justify-between items-center h-16">
-            <Link to="/" className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-900/20">
-                <Radio className="size-6" />
-              </div>
-              <span className="text-xl font-bold tracking-tight text-white uppercase">RÁDIO GFC</span>
-            </Link>
-            
-            <div className="flex-1 max-w-2xl mx-12 hidden lg:block">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 size-5" />
-                <input 
-                  className="w-full bg-white/5 border-none rounded-full pl-12 pr-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 transition-all outline-none" 
-                  placeholder="Pesquisar podcasts..." 
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+      <header className="h-20 flex items-center justify-between px-4 sm:px-8 border-b border-white/5 bg-[#0b0e14]/80 backdrop-blur-xl sticky top-0 z-50">
+        {/* Left: Branding Logo */}
+        <div className="flex items-center gap-4">
+          <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-400 hover:text-white bg-white/5 rounded-full transition-all active:scale-95">
+            <Menu className="size-5" />
+          </button>
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-all">
+              <Radio className="size-6" />
             </div>
+            <div className="hidden sm:block">
+              <h1 className="text-sm font-black tracking-tighter uppercase text-white leading-none mb-0.5">RÁDIO GFC</h1>
+              <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest leading-none">Rádio Digital</p>
+            </div>
+          </Link>
+        </div>
 
-            <div className="flex items-center space-x-4 md:space-x-6">
-              <nav className="hidden lg:flex space-x-6">
-                <Link to="/" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                  <Compass className="size-5" /> Explorar
-                </Link>
-                <Link to="/podcasts" className="text-blue-500 font-medium flex items-center gap-2">
-                  <Mic2 className="size-5" /> Podcasts
-                </Link>
-                <Link to="/news" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                  <Newspaper className="size-5" /> Notícias
-                </Link>
-                <Link to="/guiche-web" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                  <Ticket className="size-5" /> Guichê Web
-                </Link>
-                <Link to="/" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                  <Globe className="size-5" /> Mapa
-                </Link>
-                <Link to="/" className="text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                  <Heart className="size-5" /> Favoritos
-                </Link>
-              </nav>
-              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden text-gray-400 hover:text-white">
-                <Menu className="size-6" />
-              </button>
-              <div className="h-8 w-[1px] bg-white/10 hidden lg:block"></div>
-              {isAdmin && (
-                <Link to="/news" className="bg-primary/20 text-primary px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/30 transition-all flex items-center gap-2">
-                  <Edit2 className="size-3" /> Gerenciar Notícias
-                </Link>
-              )}
-              <Link to="/admin" className="w-9 h-9 rounded-full border border-white/20 overflow-hidden">
-                <img 
-                  alt="Perfil" 
-                  className="w-full h-full object-cover" 
-                  src="https://picsum.photos/seed/user/100"
-                />
+        {/* Center: Navigation (Desktop) */}
+        <nav className="hidden lg:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+          {[
+            { label: 'RÁDIOS', to: '/' },
+            { label: 'MAPA', to: '/' },
+            { label: 'CHAT', to: '/' },
+          ].map((item) => (
+            <Link 
+              key={item.label}
+              to={item.to}
+              className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-all relative py-2"
+            >
+              {item.label}
+            </Link>
+          ))}
+          <div className="w-[1px] h-4 bg-white/10 mx-2" />
+          <div className="flex items-center gap-8">
+            <Link to="/guiche-web" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/guiche-web' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>GUICHÊ WEB</Link>
+            <Link to="/podcasts" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/podcasts' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>PODCAST</Link>
+            <Link to="/news" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/news' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>NOTICIA</Link>
+          </div>
+        </nav>
+
+        {/* Right: Search & Actions */}
+        <div className="flex items-center gap-3 sm:gap-6">
+          <div className="relative group hidden sm:block">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-3.5 text-gray-500 group-focus-within:text-primary transition-colors z-10" />
+            <input 
+              type="text"
+              placeholder="Pesquisar podcasts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-full py-2.5 pl-11 pr-6 outline-none focus:border-primary/50 focus:bg-white/10 transition-all text-[10px] font-medium w-48 md:w-64 focus:w-80"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link to="/admin" className="p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-full transition-all">
+              <AtSign className="size-5" />
+            </Link>
+            {isAdmin && (
+              <Link to="/admin/dashboard" className="bg-primary/20 text-primary px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-primary/30 transition-all flex items-center gap-2">
+                <Edit2 className="size-3" /> Dashboard
               </Link>
-            </div>
+            )}
           </div>
         </div>
       </header>

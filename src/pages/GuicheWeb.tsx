@@ -76,11 +76,53 @@ export default function GuicheWeb() {
   return (
     <div className="min-h-screen bg-[#0b0e14] text-gray-100 font-display">
       {/* Header */}
-      <header className="h-20 border-b border-white/5 flex items-center px-6 md:px-12 sticky top-0 z-50 bg-[#0b0e14]/80 backdrop-blur-xl">
-        <Link to="/" className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors">
-          <ArrowLeft className="size-5" />
-          <span className="text-sm font-bold uppercase tracking-widest">Voltar ao Player</span>
-        </Link>
+      <header className="h-20 flex items-center justify-between px-4 sm:px-8 border-b border-white/5 bg-[#0b0e14]/80 backdrop-blur-xl sticky top-0 z-50">
+        {/* Left: Branding Logo */}
+        <div className="flex items-center gap-4">
+          <Link to="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft className="size-5" />
+            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Voltar</span>
+          </Link>
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20 group-hover:scale-105 transition-all">
+              <Ticket className="size-6" />
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="text-sm font-black tracking-tighter uppercase text-white leading-none mb-0.5">GUICHÊ WEB</h1>
+              <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest leading-none">Ingressos Online</p>
+            </div>
+          </Link>
+        </div>
+
+        {/* Center: Navigation (Desktop) */}
+        <nav className="hidden lg:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+          {[
+            { label: 'RÁDIOS', to: '/' },
+            { label: 'MAPA', to: '/' },
+            { label: 'CHAT', to: '/' },
+          ].map((item) => (
+            <Link 
+              key={item.label}
+              to={item.to}
+              className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 hover:text-white transition-all relative py-2"
+            >
+              {item.label}
+            </Link>
+          ))}
+          <div className="w-[1px] h-4 bg-white/10 mx-2" />
+          <div className="flex items-center gap-8">
+            <Link to="/guiche-web" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/guiche-web' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>GUICHÊ WEB</Link>
+            <Link to="/podcasts" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/podcasts' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>PODCAST</Link>
+            <Link to="/news" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/news' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>NOTICIA</Link>
+          </div>
+        </nav>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-3 sm:gap-6">
+          <Link to="/admin" className="p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-full transition-all">
+            <Star className="size-5" />
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-12">

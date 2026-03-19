@@ -420,37 +420,42 @@ export default function AdminDashboard() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
         {/* Top Bar */}
-        <header className="h-24 border-b border-white/5 px-10 flex items-center justify-between bg-[#0F0F0F]/80 backdrop-blur-xl sticky top-0 z-40">
+        <header className="h-20 border-b border-white/5 px-8 flex items-center justify-between bg-[#0F0F0F]/80 backdrop-blur-xl sticky top-0 z-40">
           <div className="flex items-center gap-6">
             <div className="relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-4 text-gray-500 group-focus-within:text-primary transition-colors" />
               <input 
                 type="text" 
                 placeholder="Pesquisar no sistema..." 
-                className="bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-6 outline-none focus:border-primary/50 transition-all text-sm w-80"
+                className="bg-white/5 border border-white/10 rounded-xl py-2.5 pl-12 pr-6 outline-none focus:border-primary/50 transition-all text-sm w-80"
               />
             </div>
-            <button className="p-3 bg-white/5 rounded-xl text-gray-400 hover:text-white transition-all relative border border-white/10">
+          </div>
+
+          <div className="flex items-center gap-6">
+            <button className="p-2.5 bg-white/5 rounded-xl text-gray-400 hover:text-white transition-all relative border border-white/10">
               <Bell className="size-5" />
               <span className="absolute top-2.5 right-2.5 size-2 bg-[#FF4D15] rounded-full border-2 border-[#0F0F0F]"></span>
             </button>
-          </div>
+            
+            <div className="h-8 w-[1px] bg-white/10"></div>
 
-          <div className="flex items-center gap-4 bg-white/5 p-1.5 pl-4 rounded-2xl border border-white/10">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-black text-white leading-tight">{branding.adminName}</p>
-              <p className="text-[9px] font-black text-primary uppercase tracking-widest">Administrador</p>
-            </div>
-            <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 overflow-hidden">
-              <img 
-                src={branding.adminPhoto || "https://picsum.photos/seed/admin/100"} 
-                alt="Admin" 
-                className="w-full h-full object-cover" 
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://picsum.photos/seed/admin/100";
-                }}
-              />
+            <div className="flex items-center gap-4 bg-white/5 p-1.5 pl-4 rounded-xl border border-white/10">
+              <div className="text-right hidden sm:block">
+                <p className="text-xs font-black text-white leading-tight">{branding.adminName}</p>
+                <p className="text-[9px] font-black text-primary uppercase tracking-widest">Administrador</p>
+              </div>
+              <div className="size-10 rounded-lg bg-primary/10 border border-primary/20 overflow-hidden">
+                <img 
+                  src={branding.adminPhoto || "https://picsum.photos/seed/admin/100"} 
+                  alt="Admin" 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://picsum.photos/seed/admin/100";
+                  }}
+                />
+              </div>
             </div>
           </div>
         </header>
