@@ -47,28 +47,33 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
 
       const cmd = onCommandRef.current;
       
-      // Improved command matching with more synonyms
+      // Helper for exact or near-exact matching
+      const isMatch = (keywords: string[]) => {
+        return keywords.some(k => text === k || text.startsWith(k + ' ') || text.endsWith(' ' + k));
+      };
+
+      // Improved command matching with more synonyms and stricter checks
       if (text.includes('toque') || text.includes('tocar') || text.includes('sintonizar') || text.includes('tune to') || text.includes('coloca na') || text.includes('mudar para')) {
         const stationName = text.replace(/toque|tocar|sintonizar|tune to|rádio|radio|coloca na|mudar para/g, '').trim();
         if (stationName) cmd('play_station', stationName);
-      } else if (text.includes('próxima') || text.includes('proxima') || text.includes('next') || text.includes('seguinte') || text.includes('pular') || text.includes('passar')) {
+      } else if (isMatch(['próxima', 'proxima', 'next', 'seguinte', 'pular', 'passar'])) {
         cmd('next');
-      } else if (text.includes('anterior') || text.includes('volta') || text.includes('previous') || text.includes('atrás') || text.includes('voltar')) {
+      } else if (isMatch(['anterior', 'volta', 'previous', 'atrás', 'voltar'])) {
         cmd('previous');
-      } else if (text.includes('mute') || text.includes('mudo') || text.includes('silêncio') || text.includes('silent') || text.includes('desativar som') || text.includes('sem som')) {
+      } else if (isMatch(['mute', 'mudo', 'silêncio', 'silent', 'desativar som', 'sem som'])) {
         cmd('mute');
-      } else if (text.includes('play') || text.includes('tocar') || text.includes('iniciar') || text.includes('start') || text.includes('continuar')) {
+      } else if (isMatch(['play', 'tocar', 'iniciar', 'start', 'continuar'])) {
         // Only trigger 'play' if it's not a 'play_station' command
         if (!text.includes('toque') && !text.includes('tocar ') && !text.includes('coloca na')) {
           cmd('play');
         }
-      } else if (text.includes('pause') || text.includes('parar') || text.includes('stop') || text.includes('pausar') || text.includes('interromper')) {
+      } else if (isMatch(['pause', 'parar', 'stop', 'pausar', 'interromper'])) {
         cmd('pause');
-      } else if (text.includes('volume alto') || text.includes('aumentar volume') || text.includes('mais alto') || text.includes('volume up') || text.includes('aumentar o som')) {
+      } else if (isMatch(['volume alto', 'aumentar volume', 'mais alto', 'volume up', 'aumentar o som'])) {
         cmd('volume_up');
-      } else if (text.includes('volume baixo') || text.includes('abaixar volume') || text.includes('mais baixo') || text.includes('volume down') || text.includes('abaixar o som')) {
+      } else if (isMatch(['volume baixo', 'abaixar volume', 'mais baixo', 'volume down', 'abaixar o som'])) {
         cmd('volume_down');
-      } else if (text.includes('ajuda') || text.includes('comandos') || text.includes('help') || text.includes('commands') || text.includes('o que você faz')) {
+      } else if (isMatch(['ajuda', 'comandos', 'help', 'commands', 'o que você faz'])) {
         cmd('help');
       }
     };

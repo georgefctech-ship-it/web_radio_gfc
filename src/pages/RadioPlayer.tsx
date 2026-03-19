@@ -752,9 +752,21 @@ export default function RadioPlayer() {
     setIsPlaying(true);
   }, [currentStation, stations, setCurrentStation, setIsPlaying]);
 
+  const lastCommandTimeRef = useRef<number>(0);
+
   const handleVoiceCommand = useCallback((command: string, params?: string) => {
+    const now = Date.now();
+    // 2 second cooldown between commands to prevent loops
+    if (now - lastCommandTimeRef.current < 2000) {
+      console.log('[VoiceControl] Ignoring command due to cooldown:', command);
+      return;
+    }
+    
+    lastCommandTimeRef.current = now;
     setLastVoiceCommand(params ? `${command}: ${params}` : command);
     setTimeout(() => setLastVoiceCommand(null), 3000);
+
+    console.log('[VoiceControl] Executing command:', command, params);
 
     switch (command) {
       case 'play_station':
@@ -779,10 +791,10 @@ export default function RadioPlayer() {
         setIsMuted(!isMuted);
         break;
       case 'play':
-        setIsPlaying(true);
+        if (!isPlaying) setIsPlaying(true);
         break;
       case 'pause':
-        setIsPlaying(false);
+        if (isPlaying) setIsPlaying(false);
         break;
       case 'volume_up':
         setVolume(Math.min(1, volume + 0.1));
@@ -795,7 +807,7 @@ export default function RadioPlayer() {
         setTimeout(() => setError(null), 5000);
         break;
     }
-  }, [stations, setCurrentStation, setIsPlaying, isMuted, setIsMuted, volume, setVolume, handleNext, handlePrevious]);
+  }, [stations, setCurrentStation, isPlaying, setIsPlaying, isMuted, setIsMuted, volume, setVolume, handleNext, handlePrevious]);
 
   const { isListening, toggleListening, error: voiceError } = useVoiceControl({
     onCommand: handleVoiceCommand

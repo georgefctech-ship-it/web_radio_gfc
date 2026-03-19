@@ -43,8 +43,8 @@ async function startServer() {
   app.get("/api/socket-health", (req, res) => {
     res.json({ 
       status: "ok", 
-      clients: io.engine.clientsCount,
-      transports: Object.keys(io.engine.transports || {})
+      clients: (io.engine as any).clientsCount,
+      transports: Object.keys((io.engine as any).transports || {})
     });
   });
 
