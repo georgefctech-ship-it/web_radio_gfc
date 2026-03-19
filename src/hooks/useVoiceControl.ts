@@ -42,36 +42,37 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
 
     recognition.onresult = (event: any) => {
       const last = event.results.length - 1;
-      const text = event.results[last][0].transcript.toLowerCase().trim();
+      const text = event.results[last][0].transcript.toLowerCase().trim().replace(/[.,!?;:]/g, '');
       console.log('[VoiceControl] Result:', text);
 
       const cmd = onCommandRef.current;
       
-      // Helper for exact or near-exact matching
+      // Helper for matching keywords within the transcript
       const isMatch = (keywords: string[]) => {
-        return keywords.some(k => text === k || text.startsWith(k + ' ') || text.endsWith(' ' + k));
+        const words = text.split(/\s+/);
+        return keywords.some(k => words.includes(k));
       };
 
       // Improved command matching with more synonyms and stricter checks
       if (text.includes('toque') || text.includes('tocar') || text.includes('sintonizar') || text.includes('tune to') || text.includes('coloca na') || text.includes('mudar para')) {
         const stationName = text.replace(/toque|tocar|sintonizar|tune to|rádio|radio|coloca na|mudar para/g, '').trim();
         if (stationName) cmd('play_station', stationName);
-      } else if (isMatch(['próxima', 'proxima', 'next', 'seguinte', 'pular', 'passar'])) {
+      } else if (isMatch(['próxima', 'proxima', 'next', 'seguinte', 'pular', 'passar', 'avançar', 'avanca', 'próximo', 'proximo', 'frente'])) {
         cmd('next');
-      } else if (isMatch(['anterior', 'volta', 'previous', 'atrás', 'voltar'])) {
+      } else if (isMatch(['anterior', 'volta', 'previous', 'atrás', 'voltar', 'tras', 'trás'])) {
         cmd('previous');
       } else if (isMatch(['mute', 'mudo', 'silêncio', 'silent', 'desativar som', 'sem som'])) {
         cmd('mute');
-      } else if (isMatch(['play', 'tocar', 'iniciar', 'start', 'continuar'])) {
+      } else if (isMatch(['play', 'tocar', 'iniciar', 'start', 'continuar', 'ligar'])) {
         // Only trigger 'play' if it's not a 'play_station' command
         if (!text.includes('toque') && !text.includes('tocar ') && !text.includes('coloca na')) {
           cmd('play');
         }
-      } else if (isMatch(['pause', 'parar', 'stop', 'pausar', 'interromper'])) {
+      } else if (isMatch(['pause', 'parar', 'stop', 'pausar', 'interromper', 'pausa', 'desligar'])) {
         cmd('pause');
-      } else if (isMatch(['volume alto', 'aumentar volume', 'mais alto', 'volume up', 'aumentar o som'])) {
+      } else if (isMatch(['volume alto', 'aumentar volume', 'mais alto', 'volume up', 'aumentar o som', 'aumentar'])) {
         cmd('volume_up');
-      } else if (isMatch(['volume baixo', 'abaixar volume', 'mais baixo', 'volume down', 'abaixar o som'])) {
+      } else if (isMatch(['volume baixo', 'abaixar volume', 'mais baixo', 'volume down', 'abaixar o som', 'diminuir', 'abaixar'])) {
         cmd('volume_down');
       } else if (isMatch(['ajuda', 'comandos', 'help', 'commands', 'o que você faz'])) {
         cmd('help');
@@ -82,8 +83,6 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
       isStartingRef.current = false;
       
       if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'network' || event.error === 'aborted') {
-        // These are common and should just trigger a restart if intent is true
-        // We log them as info instead of error to avoid cluttering
         console.log(`[VoiceControl] Info (expected): ${event.error}`);
         return;
       }
@@ -105,6 +104,7 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
       
       // Auto-restart if the user still wants to listen
       if (isListeningIntentRef.current) {
+        console.log('[VoiceControl] Auto-restarting...');
         setTimeout(() => {
           if (isListeningIntentRef.current && !isStartingRef.current) {
             try {
@@ -113,9 +113,21 @@ export function useVoiceControl({ onCommand, language = 'pt-BR' }: VoiceControlO
             } catch (e) {
               console.error('[VoiceControl] Failed to restart:', e);
               isStartingRef.current = false;
+              // Try again after a longer delay if it failed
+              setTimeout(() => {
+                if (isListeningIntentRef.current && !isStartingRef.current) {
+                  try {
+                    isStartingRef.current = true;
+                    recognition.start();
+                  } catch (err) {
+                    console.error('[VoiceControl] Final restart attempt failed:', err);
+                    isStartingRef.current = false;
+                  }
+                }
+              }, 1000);
             }
           }
-        }, 400); // Slightly longer delay for mobile stability
+        }, 600); 
       } else {
         setIsListening(false);
       }
