@@ -656,11 +656,20 @@ export const LiveStudio: React.FC = () => {
           </button>
           
           <button 
+            onClick={stopAllVignettes}
+            className="px-6 py-3 bg-red-600/20 text-red-500 border border-red-500/30 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-600 hover:text-white hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-red-600/10"
+            title="PARAR TUDO (Pânico)"
+          >
+            <Zap className="size-4 fill-current" />
+            PÂNICO
+          </button>
+
+          <button 
             onClick={handleToggleOnAir}
-            className={`px-6 sm:px-8 py-3 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center gap-3 w-full sm:w-auto justify-center ${
+            className={`px-6 sm:px-8 py-3 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center gap-3 w-full sm:w-auto justify-center hover:scale-105 active:scale-95 ${
               isOnAir 
-                ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/20' 
-                : 'bg-white text-black hover:scale-105'
+                ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' 
+                : 'bg-white text-black shadow-lg shadow-white/10'
             }`}
           >
             {isOnAir ? <Square className="size-4 fill-current" /> : <Activity className="size-4" />}
@@ -758,7 +767,9 @@ export const LiveStudio: React.FC = () => {
                 {/* Channels Grid */}
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-4 gap-6 sm:gap-8">
                   {/* Channel 1: Microphone */}
-                  <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 transition-colors">
+                  <div className={`flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border transition-all hover:scale-[1.02] hover:bg-black/30 ${
+                    isMicActive ? 'border-red-500/30 shadow-lg shadow-red-500/5' : 'border-white/5 hover:border-white/10'
+                  }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-[8px] font-black uppercase tracking-widest text-primary">CH 01</span>
@@ -766,9 +777,9 @@ export const LiveStudio: React.FC = () => {
                       </div>
                       <button 
                         onClick={toggleMic}
-                        className={`size-12 rounded-2xl flex items-center justify-center transition-all shadow-xl ${
+                        className={`size-12 rounded-2xl flex items-center justify-center transition-all shadow-xl hover:scale-110 active:scale-90 ${
                           isMicActive 
-                            ? 'bg-red-500 text-white animate-pulse shadow-red-500/20' 
+                            ? 'bg-red-500 text-white animate-pulse shadow-red-500/40' 
                             : 'bg-white/5 text-gray-500 hover:bg-white/10'
                         }`}
                       >
@@ -799,7 +810,7 @@ export const LiveStudio: React.FC = () => {
                   </div>
 
                   {/* Channel 2: Deck 1 */}
-                  <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 transition-colors">
+                  <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 hover:scale-[1.02] hover:bg-black/30 transition-all">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-[8px] font-black uppercase tracking-widest text-primary">CH 02</span>
@@ -835,7 +846,7 @@ export const LiveStudio: React.FC = () => {
                   </div>
 
                   {/* Channel 3: Deck 2 */}
-                  <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 transition-colors">
+                  <div className="flex flex-col gap-6 bg-black/20 p-4 sm:p-6 rounded-[32px] border border-white/5 hover:border-white/10 hover:scale-[1.02] hover:bg-black/30 transition-all">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-[8px] font-black uppercase tracking-widest text-primary">CH 03</span>
@@ -871,13 +882,17 @@ export const LiveStudio: React.FC = () => {
                   </div>
 
                   {/* Master Output Channel */}
-                  <div className="flex flex-col gap-6 bg-primary/5 p-4 sm:p-6 rounded-[32px] border border-primary/10 hover:border-primary/20 transition-colors">
+                  <div className="flex flex-col gap-6 bg-primary/5 p-4 sm:p-6 rounded-[32px] border border-primary/10 hover:border-primary/20 hover:scale-[1.02] hover:bg-primary/10 transition-all">
                     <div className="flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-[8px] font-black uppercase tracking-widest text-primary">MASTER</span>
                         <span className="text-[12px] font-black uppercase text-white">Saída Geral</span>
                       </div>
-                      <div className={`size-12 rounded-2xl flex items-center justify-center bg-white/5 ${isOnAir ? 'text-red-500' : 'text-gray-500'}`}>
+                      <div className={`size-12 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
+                        isOnAir 
+                          ? 'bg-red-500 text-white animate-pulse shadow-red-500/20' 
+                          : 'bg-white/5 text-gray-500'
+                      }`}>
                         <Volume2 className="size-6" />
                       </div>
                     </div>
@@ -928,13 +943,13 @@ export const LiveStudio: React.FC = () => {
                 <div className="flex items-center gap-6 mt-2">
                   <button 
                     onClick={() => setIsDucking(!isDucking)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${
+                    className={`flex items-center gap-2 px-6 py-3 rounded-full border transition-all hover:scale-105 active:scale-95 shadow-lg ${
                       isDucking 
-                        ? 'bg-primary/20 border-primary text-primary' 
+                        ? 'bg-primary/20 border-primary text-primary shadow-primary/10' 
                         : 'bg-white/5 border-white/10 text-gray-500'
                     }`}
                   >
-                    <div className={`size-1.5 rounded-full ${isDucking ? 'bg-primary' : 'bg-gray-700'}`} />
+                    <div className={`size-2 rounded-full ${isDucking ? 'bg-primary animate-pulse' : 'bg-gray-700'}`} />
                     <span className="text-[10px] font-black uppercase tracking-widest">Talkover (Ducking)</span>
                   </button>
                 </div>
@@ -973,11 +988,11 @@ export const LiveStudio: React.FC = () => {
                 
                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                   {vignettes.map((v) => (
-                    <div key={v.id} className="group relative">
+                    <div key={v.id} className="group relative hover:scale-[1.05] transition-all duration-300">
                       <div className="flex flex-col gap-1">
                         <button
                           onClick={() => playVignette(v.url, 'deck1')}
-                          className="w-full h-16 bg-black/40 border border-white/5 rounded-t-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
+                          className="w-full h-16 bg-black/40 border border-white/5 rounded-t-2xl p-3 flex flex-col justify-between hover:bg-primary/20 hover:border-primary/30 transition-all text-left overflow-hidden active:scale-95"
                         >
                           <div className="flex items-center justify-between w-full">
                             <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary truncate pr-4">{v.name}</span>
@@ -986,9 +1001,9 @@ export const LiveStudio: React.FC = () => {
                                 e.stopPropagation();
                                 handleDeleteVignette(v);
                               }}
-                              className="p-1 hover:bg-red-500/20 rounded-md transition-colors"
+                              className="p-1.5 hover:bg-red-500/20 rounded-lg transition-colors group/del"
                             >
-                              <Trash2 className="size-2.5 text-red-500/50 hover:text-red-500" />
+                              <Trash2 className="size-3 text-red-500/50 group-hover/del:text-red-500" />
                             </button>
                           </div>
                           <div className="flex items-center justify-between">
@@ -998,7 +1013,7 @@ export const LiveStudio: React.FC = () => {
                         </button>
                         <button
                           onClick={() => playVignette(v.url, 'deck2')}
-                          className="w-full h-16 bg-black/40 border border-white/5 rounded-b-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
+                          className="w-full h-16 bg-black/40 border border-white/5 rounded-b-2xl p-3 flex flex-col justify-between hover:bg-primary/20 hover:border-primary/30 transition-all text-left overflow-hidden active:scale-95"
                         >
                           <div className="flex items-center justify-between">
                             <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
@@ -1044,20 +1059,26 @@ export const LiveStudio: React.FC = () => {
                     <button
                       key={track.id}
                       onClick={() => toggleTrack(track)}
-                      className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
+                      className={`flex items-center gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-98 ${
                         activeTrack === track.id 
-                          ? 'bg-primary/20 border-primary text-primary' 
-                          : 'bg-black/40 border-white/5 text-gray-400 hover:border-white/20'
+                          ? 'bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10' 
+                          : 'bg-black/40 border-white/5 text-gray-400 hover:border-white/20 hover:bg-black/60'
                       }`}
                     >
-                      <div className={`size-10 rounded-xl flex items-center justify-center ${activeTrack === track.id ? 'bg-primary/20' : 'bg-white/5'}`}>
+                      <div className={`size-10 rounded-xl flex items-center justify-center transition-colors ${activeTrack === track.id ? 'bg-primary/20' : 'bg-white/5 group-hover:bg-white/10'}`}>
                         {activeTrack === track.id ? <Loader2 className="size-5 animate-spin" /> : <Music2 className="size-5" />}
                       </div>
                       <div className="flex-1 text-left overflow-hidden">
                         <p className="text-[10px] font-black uppercase tracking-widest truncate">{track.name}</p>
                         <p className="text-[8px] font-bold uppercase opacity-50">{activeTrack === track.id ? 'Reproduzindo (Loop)' : 'Pronto'}</p>
                       </div>
-                      {activeTrack === track.id && <Zap className="size-4 animate-pulse" />}
+                      {activeTrack === track.id && (
+                        <div className="flex gap-0.5">
+                          {[...Array(3)].map((_, i) => (
+                            <div key={i} className="w-0.5 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                          ))}
+                        </div>
+                      )}
                     </button>
                   ))}
                   {tracks.length === 0 && !studioLoading && (
@@ -1481,7 +1502,7 @@ export const LiveStudio: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Users className="size-3 text-gray-400" />
-            <span>Ouvintes: 0</span>
+            <span>Ouvintes: {listeners}</span>
           </div>
         </div>
 
@@ -1494,12 +1515,6 @@ export const LiveStudio: React.FC = () => {
             <div className={`size-1.5 rounded-full ${activeTrack ? 'bg-primary animate-pulse' : 'bg-gray-700'}`} />
             <span>Trilha: {activeTrack ? 'Ativa' : 'Parada'}</span>
           </div>
-          <button 
-            onClick={stopAllVignettes}
-            className="px-3 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded-full hover:bg-red-500 hover:text-white transition-all"
-          >
-            Pânico (Stop All)
-          </button>
         </div>
       </footer>
     </div>
