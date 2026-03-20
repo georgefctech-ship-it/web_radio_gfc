@@ -21,7 +21,7 @@ console.log("[Socket] Origin:", typeof window !== 'undefined' ? window.location.
 
 export const socket = io(socketUrl, {
   path: '/socket.io/',
-  transports: ['polling', 'websocket'], // Try polling first for maximum compatibility, matching server
+  transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
   upgrade: true, // Allow upgrading from polling to websocket
   reconnection: true,
   reconnectionAttempts: Infinity, // Keep trying forever
@@ -42,11 +42,10 @@ socket.on('connect_error', (err) => {
     message: err.message,
     description: (err as any).description,
     context: (err as any).context,
-    type: err.name
+    type: err.name,
+    url: socketUrl,
+    transport: socket.io.engine ? socket.io.engine.transport.name : 'none'
   });
-  
-  // If websocket fails, it will automatically try polling if it's in the list
-  // but we already put polling first now.
 });
 
 socket.on('disconnect', (reason) => {

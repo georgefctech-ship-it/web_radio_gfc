@@ -662,11 +662,6 @@ export const LiveStudio: React.FC = () => {
             )}
           </div>
 
-          <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-            <Users className="size-4 text-primary" />
-            <span className="text-xs font-black">{listeners} OUVINTES</span>
-          </div>
-
           <button 
             onClick={toggleMonitoring}
             className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${

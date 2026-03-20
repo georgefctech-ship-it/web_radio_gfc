@@ -76,7 +76,7 @@ export function Chat({ onClose, isAdmin, initialUserName }: ChatProps) {
         </div>
         <div className="text-center space-y-2">
           <h3 className="text-2xl font-bold text-white">Chat em Direto</h3>
-          <p className="text-sm text-gray-400">Junte-se a {(listeners/1000).toFixed(1)}k ouvintes ativos agora mesmo</p>
+          <p className="text-sm text-gray-400">Junte-se à nossa comunidade agora mesmo</p>
         </div>
         <div className="w-full max-w-xs space-y-4">
           <input 
@@ -108,7 +108,6 @@ export function Chat({ onClose, isAdmin, initialUserName }: ChatProps) {
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
             Chat em Direto
           </h3>
-          <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-0.5">{(listeners/1000).toFixed(1)}k ouvintes ativos</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="text-gray-400 hover:text-white p-1.5 transition-colors">

@@ -1068,7 +1068,7 @@ export default function RadioPlayer() {
         className={`fixed inset-y-0 left-0 z-50 w-full sm:w-[400px] p-2 sm:p-4 transform transition-transform duration-500 ease-in-out lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div 
-          className="flex flex-col h-full p-6 sm:p-8 relative overflow-hidden rounded-[32px] sm:rounded-[48px] border border-white/10 shadow-2xl"
+          className="flex flex-col h-full p-4 sm:p-8 relative overflow-y-auto custom-scrollbar rounded-[32px] sm:rounded-[48px] border border-white/10 shadow-2xl"
           style={{ backgroundColor: dominantColor }}
         >
           {/* Background Gradient Overlay for depth */}
@@ -1107,13 +1107,13 @@ export default function RadioPlayer() {
               </p>
               
               {isLive && (liveInfo?.whatsapp || liveInfo?.instagram) && (
-                <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center justify-center gap-4 mt-2 w-full">
                   {liveInfo.whatsapp && (
                     <a 
                       href={`https://wa.me/${liveInfo.whatsapp}`} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white/80 hover:text-white transition-colors"
+                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/80 hover:text-white transition-colors bg-white/10 px-3 py-1.5 rounded-full border border-white/10"
                     >
                       <MessageSquare className="size-3 text-emerald-400" />
                       WhatsApp
@@ -1124,7 +1124,7 @@ export default function RadioPlayer() {
                       href={`https://instagram.com/${liveInfo.instagram.replace('@', '')}`} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-white/80 hover:text-white transition-colors"
+                      className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/80 hover:text-white transition-colors bg-white/10 px-3 py-1.5 rounded-full border border-white/10"
                     >
                       <Instagram className="size-3 text-pink-400" />
                       Instagram
@@ -1446,7 +1446,7 @@ export default function RadioPlayer() {
           </div>
 
           {/* Center: Navigation (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+          <nav className="hidden lg:flex items-center gap-6 absolute left-1/2 -translate-x-1/2 bg-white/5 px-6 py-2 rounded-full border border-white/10 shadow-inner">
             {[
               { label: 'RÁDIOS', active: activeTab === 'explore', onClick: () => setActiveTab('explore') },
               { label: 'MAPA', active: activeTab === 'map', onClick: () => setActiveTab('map') },
@@ -1455,24 +1455,18 @@ export default function RadioPlayer() {
               <button 
                 key={item.label}
                 onClick={item.onClick}
-                className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-2 ${
-                  item.active ? 'text-primary' : 'text-gray-500 hover:text-white'
+                className={`text-[9px] font-black uppercase tracking-[0.2em] transition-all relative px-3 py-1.5 rounded-full ${
+                  item.active ? 'text-white bg-primary shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
               >
                 {item.label}
-                {item.active && (
-                  <motion.div 
-                    layoutId="nav-active"
-                    className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                  />
-                )}
               </button>
             ))}
-            <div className="w-[1px] h-4 bg-white/10 mx-2" />
-            <div className="flex items-center gap-8">
-              <Link to="/guiche-web" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/guiche-web' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>GUICHÊ WEB</Link>
-              <Link to="/podcasts" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/podcasts' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>PODCAST</Link>
-              <Link to="/news" className={`text-[10px] font-black uppercase tracking-[0.2em] transition-colors ${window.location.pathname === '/news' ? 'text-primary' : 'text-gray-500 hover:text-white'}`}>NOTICIA</Link>
+            <div className="w-[1px] h-3 bg-white/10 mx-1" />
+            <div className="flex items-center gap-6">
+              <Link to="/guiche-web" className={`text-[9px] font-black uppercase tracking-[0.2em] transition-colors px-3 py-1.5 rounded-full hover:bg-white/5 ${window.location.pathname === '/guiche-web' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}>GUICHÊ WEB</Link>
+              <Link to="/podcasts" className={`text-[9px] font-black uppercase tracking-[0.2em] transition-colors px-3 py-1.5 rounded-full hover:bg-white/5 ${window.location.pathname === '/podcasts' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}>PODCAST</Link>
+              <Link to="/news" className={`text-[9px] font-black uppercase tracking-[0.2em] transition-colors px-3 py-1.5 rounded-full hover:bg-white/5 ${window.location.pathname === '/news' ? 'text-primary' : 'text-gray-400 hover:text-white'}`}>NOTICIA</Link>
             </div>
           </nav>
 
@@ -1538,7 +1532,7 @@ export default function RadioPlayer() {
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-10">
+        <div className={`flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-10 ${!isSidebarOpen && currentStation ? 'pb-24 lg:pb-10' : ''}`}>
           {activeTab === 'map' ? (
             <div className="h-full rounded-2xl sm:rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
               <GoogleMapView 
@@ -1592,11 +1586,6 @@ export default function RadioPlayer() {
                         }}
                       />
                       
-                      {/* Listener Count Overlay */}
-                      <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded border border-white/5">
-                        <span className="text-[9px] font-black text-white/90">{Math.floor(Math.random() * 5000).toLocaleString()}</span>
-                      </div>
-
                       {/* Play Overlay */}
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <div className="size-10 bg-primary rounded-full flex items-center justify-center shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-300">
@@ -1640,6 +1629,44 @@ export default function RadioPlayer() {
 
           <div className="whitespace-nowrap ml-4">© 2026 {branding.name} - Todos os direitos reservados</div>
         </footer>
+
+        {/* Mobile Mini Player - Shows when sidebar is closed */}
+        {!isSidebarOpen && currentStation && (
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-bg-dark/95 backdrop-blur-2xl border-t border-white/10 px-4 py-3 flex items-center justify-between shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center gap-3 min-w-0" onClick={() => setIsSidebarOpen(true)}>
+              <img 
+                src={currentStation.favicon || branding.logo} 
+                alt={currentStation.name} 
+                className="size-10 rounded-lg object-cover border border-white/10"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = branding.logo;
+                }}
+              />
+              <div className="min-w-0">
+                <h4 className="text-[10px] font-black text-white uppercase truncate">{currentStation.name}</h4>
+                <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest truncate">
+                  {isLive ? 'ESTÚDIO AO VIVO' : 'WEB RÁDIO'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsPlaying(!isPlaying);
+                }}
+                className="size-10 bg-white text-primary rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+                style={{ color: dominantColor }}
+              >
+                {isPlaying ? <Pause className="size-4 fill-current" /> : <Play className="size-4 fill-current ml-0.5" />}
+              </button>
+              <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-gray-400 hover:text-white">
+                <Maximize2 className="size-5" />
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Admin Modal */}
