@@ -21,14 +21,11 @@ async function startServer() {
     const io = new Server(httpServer, {
       path: '/socket.io/',
       cors: {
-        origin: (origin, callback) => {
-          // Allow all origins for now, but echo it back to support credentials
-          callback(null, origin || "*");
-        },
+        origin: "*", // More permissive for AI Studio environment
         methods: ["GET", "POST"],
         credentials: true
       },
-      transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
+      transports: ['polling', 'websocket'], // Align with client: polling first
       pingTimeout: 60000,
       pingInterval: 25000,
       connectTimeout: 45000,
@@ -36,10 +33,11 @@ async function startServer() {
       maxHttpBufferSize: 1e8
     });
 
-    // Add engine error logging
+    // Add engine error logging with more detail
     io.engine.on("connection_error", (err) => {
-      console.error("[Socket Engine] Connection Error:", {
-        req: err.req.url,
+      console.error("[Socket Engine] Connection Error Detail:", {
+        url: err.req.url,
+        headers: err.req.headers,
         code: err.code,
         message: err.message,
         context: err.context
