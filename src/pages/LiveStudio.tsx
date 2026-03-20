@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2, Zap, RefreshCw } from 'lucide-react';
 import { socket } from '../lib/socket';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAudioMixer } from '../hooks/useAudioMixer';
+import { useAudioStudio } from '../hooks/useAudioStudio';
 import { VUMeter } from '../components/VUMeter';
 import { AudioVisualizer } from '../components/AudioVisualizer';
 import { Chat } from '../components/Chat';
-import { vignetteService, type Vignette } from '../services/vignetteService';
+import { audioService, type AudioFile } from '../services/audioService';
 import { usePlayer } from '../context/PlayerContext';
 import { supabase } from '../lib/supabase';
 import { GoogleGenAI, Modality } from "@google/genai";
@@ -36,8 +36,25 @@ export const LiveStudio: React.FC = () => {
     crossfader,
     setCrossfader,
     isDucking,
-    setIsDucking
-  } = useAudioMixer();
+    setIsDucking,
+    vignettes,
+    tracks,
+    commercials,
+    loading: studioLoading,
+    queue,
+    activeTrack,
+    trackVolume,
+    setTrackVolume,
+    playInstantVignette,
+    toggleTrack,
+    addToQueue,
+    removeFromQueue,
+    clearQueue,
+    playNextInQueue,
+    uploadVignette,
+    deleteVignette,
+    refresh: refreshStudio
+  } = useAudioStudio();
 
   const [isOnAir, setIsOnAir] = useState(false);
   const [activeTab, setActiveTab] = useState<'diagnostics' | 'history' | 'listeners' | 'chat'>('chat');
@@ -50,13 +67,12 @@ export const LiveStudio: React.FC = () => {
   const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [listeners, setListeners] = useState(0);
   const [latency, setLatency] = useState<number | null>(null);
-  const [vignettes, setVignettes] = useState<Vignette[]>([]);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isVignetteFormOpen, setIsVignetteFormOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
-  const [vignetteToDelete, setVignetteToDelete] = useState<string | null>(null);
-  const [editingVignette, setEditingVignette] = useState<Vignette | null>(null);
-  const [vignetteForm, setVignetteForm] = useState({ name: '', url: '' });
+  const [vignetteToDelete, setVignetteToDelete] = useState<AudioFile | null>(null);
+  const [editingVignette, setEditingVignette] = useState<AudioFile | null>(null);
+  const [vignetteForm, setVignetteForm] = useState({ name: '', url: '', file: null as File | null });
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
@@ -95,19 +111,8 @@ export const LiveStudio: React.FC = () => {
 
   // Load Vignettes from Bucket
   useEffect(() => {
-    const loadVignettes = async () => {
-      // First try to list from bucket as requested
-      const bucketVignettes = await vignetteService.listFromBucket();
-      if (bucketVignettes.length > 0) {
-        setVignettes(bucketVignettes);
-      } else {
-        // Fallback to database/default
-        const data = await vignetteService.getAll();
-        setVignettes(data);
-      }
-    };
-    loadVignettes();
-  }, []);
+    refreshStudio();
+  }, [refreshStudio]);
 
   // Socket and WebRTC Setup
   useEffect(() => {
@@ -458,32 +463,40 @@ export const LiveStudio: React.FC = () => {
 
   const handleSaveVignette = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingVignette) {
-      const updated = await vignetteService.update(editingVignette.id, vignetteForm);
-      if (updated) {
-        setVignettes(vignettes.map(v => v.id === updated.id ? updated : v));
+    setIsGeneratingVignette(true);
+    try {
+      if (vignetteForm.file) {
+        const success = await uploadVignette(vignetteForm.file, vignetteForm.name);
+        if (success) {
+          setStatusMessage({ type: 'success', text: 'Vinheta enviada com sucesso!' });
+        } else {
+          throw new Error("Erro ao enviar arquivo.");
+        }
+      } else if (vignetteForm.url) {
+        // If it's just a URL, we can't easily "upload" it to the bucket unless we fetch it first
+        // For now, let's assume the user uploads files
+        setStatusMessage({ type: 'error', text: 'Por favor, selecione um arquivo para enviar.' });
+        return;
       }
-    } else {
-      const created = await vignetteService.create(vignetteForm);
-      if (created) {
-        setVignettes([...vignettes, created]);
-      }
+      setIsVignetteFormOpen(false);
+      setVignetteForm({ name: '', url: '', file: null });
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err.message || 'Erro ao salvar vinheta.' });
+    } finally {
+      setIsGeneratingVignette(false);
+      setTimeout(() => setStatusMessage(null), 3000);
     }
-    setIsVignetteFormOpen(false);
-    setEditingVignette(null);
-    setVignetteForm({ name: '', url: '' });
   };
 
-  const handleDeleteVignette = async (id: string) => {
-    setVignetteToDelete(id);
+  const handleDeleteVignette = (vignette: AudioFile) => {
+    setVignetteToDelete(vignette);
     setIsConfirmDeleteOpen(true);
   };
 
   const confirmDeleteVignette = async () => {
     if (!vignetteToDelete) return;
-    const success = await vignetteService.delete(vignetteToDelete);
+    const success = await deleteVignette(vignetteToDelete.fileName);
     if (success) {
-      setVignettes(vignettes.filter(v => v.id !== vignetteToDelete));
       setStatusMessage({ type: 'success', text: 'Vinheta excluída!' });
     } else {
       setStatusMessage({ type: 'error', text: 'Erro ao excluir vinheta.' });
@@ -498,11 +511,10 @@ export const LiveStudio: React.FC = () => {
     setIsGeneratingVignette(true);
     console.log("[Studio] Iniciando geração de vinheta com IA...");
     try {
-      // Try both Vite and process.env for compatibility
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : null);
       
       if (!apiKey) {
-        throw new Error("GEMINI_API_KEY não encontrada. Se você estiver no Vercel, adicione-a nas variáveis de ambiente.");
+        throw new Error("GEMINI_API_KEY não encontrada.");
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -519,17 +531,8 @@ export const LiveStudio: React.FC = () => {
         },
       });
 
-      console.log("[Studio] Resposta da IA recebida:", response);
-
-      if (!response.candidates || response.candidates.length === 0) {
-        throw new Error("A IA não retornou nenhum candidato de resposta.");
-      }
-
-      const base64Audio = response.candidates[0].content?.parts?.[0]?.inlineData?.data;
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
-        console.log("[Studio] Áudio recebido da IA, processando...");
-        // Gemini TTS returns raw PCM 16-bit LE at 24kHz. 
-        // We need to add a WAV header so decodeAudioData can handle it.
         const binaryString = atob(base64Audio);
         const pcmData = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -538,13 +541,9 @@ export const LiveStudio: React.FC = () => {
         
         const wavHeader = new ArrayBuffer(44);
         const view = new DataView(wavHeader);
-        
-        // RIFF chunk
         view.setUint32(0, 0x52494646, false); // "RIFF"
         view.setUint32(4, 36 + pcmData.length, true); // File size
         view.setUint32(8, 0x57415645, false); // "WAVE"
-        
-        // fmt chunk
         view.setUint32(12, 0x666d7420, false); // "fmt "
         view.setUint32(16, 16, true); // Chunk size
         view.setUint16(20, 1, true); // Audio format (PCM)
@@ -553,8 +552,6 @@ export const LiveStudio: React.FC = () => {
         view.setUint32(28, 24000 * 2, true); // Byte rate
         view.setUint16(32, 2, true); // Block align
         view.setUint16(34, 16, true); // Bits per sample
-        
-        // data chunk
         view.setUint32(36, 0x64617461, false); // "data"
         view.setUint32(40, pcmData.length, true); // Data size
         
@@ -562,42 +559,23 @@ export const LiveStudio: React.FC = () => {
         wavData.set(new Uint8Array(wavHeader), 0);
         wavData.set(pcmData, 44);
         
-        // Convert back to base64 efficiently
-        let binary = '';
-        const chunk_size = 8192;
-        for (let i = 0; i < wavData.length; i += chunk_size) {
-          binary += String.fromCharCode.apply(null, Array.from(wavData.slice(i, i + chunk_size)));
-        }
-        const base64Wav = btoa(binary);
+        const blob = new Blob([wavData], { type: 'audio/wav' });
+        const name = aiPrompt.length > 20 ? aiPrompt.substring(0, 20) : aiPrompt;
         
-        const audioUrl = `data:audio/wav;base64,${base64Wav}`;
-        const name = aiPrompt.length > 20 ? aiPrompt.substring(0, 20) + '...' : aiPrompt;
-        
-        console.log("[Studio] Vinheta processada (WAV), tamanho:", wavData.length, "bytes");
-        console.log("[Studio] Tentando salvar vinheta no Supabase...");
-        const created = await vignetteService.create({ name: `IA: ${name}`, url: audioUrl });
-        
-        if (created) {
-          setVignettes(prev => [...prev, created]);
-          console.log("[Studio] Vinheta salva com sucesso!");
+        const success = await uploadVignette(blob, `${name}.wav`);
+        if (success) {
+          setStatusMessage({ type: 'success', text: 'Vinheta IA gerada e salva!' });
+          setIsManageModalOpen(false);
         } else {
-          console.warn("[Studio] Falha ao salvar no banco, adicionando localmente para uso imediato.");
-          const localVignette: Vignette = {
-            id: `local-${Date.now()}`,
-            name: `IA: ${name} (Não salva)`,
-            url: audioUrl
-          };
-          setVignettes(prev => [...prev, localVignette]);
+          throw new Error("Erro ao salvar vinheta gerada.");
         }
-        setIsManageModalOpen(false);
-      } else {
-        throw new Error("Nenhum dado de áudio retornado pela IA.");
       }
     } catch (err: any) {
       console.error("[Studio] Erro ao gerar vinheta com IA:", err);
-      alert(`Erro: ${err.message || "Falha ao gerar áudio com IA."}`);
+      setStatusMessage({ type: 'error', text: err.message || "Falha ao gerar áudio com IA." });
     } finally {
       setIsGeneratingVignette(false);
+      setTimeout(() => setStatusMessage(null), 3000);
     }
   };
 
@@ -964,111 +942,204 @@ export const LiveStudio: React.FC = () => {
             </div>
           </section>
 
-          {/* Quick Play & AI Tools Section */}
-          <div className="grid md:grid-cols-[1fr_350px] gap-8">
-            <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-                <div className="flex flex-col gap-1">
-                  <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Cartucheira de Vinhetas</h2>
-                  <p className="text-[10px] text-gray-600 font-bold uppercase">Toque instantâneo de áudios</p>
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <button 
-                    onClick={() => setIsManageModalOpen(true)}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white/5 text-gray-400 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                  >
-                    <Wand2 className="size-3" />
-                    IA
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setEditingVignette(null);
-                      setVignetteForm({ name: '', url: '' });
-                      setIsVignetteFormOpen(true);
-                    }}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
-                  >
-                    <Plus className="size-3" />
-                    Novo
-                  </button>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-                {vignettes.map((v) => (
-                  <div key={v.id} className="group relative">
-                    <div className="flex flex-col gap-1">
-                      <button
-                        onClick={async () => {
-                          try {
-                            await playVignette(v.url, 'deck1');
-                          } catch (err: any) {
-                            setStatusMessage({ type: 'error', text: 'Erro ao tocar vinheta: ' + (err.message || 'Falha no áudio') });
-                            setTimeout(() => setStatusMessage(null), 3000);
-                          }
-                        }}
-                        className="w-full h-16 bg-black/40 border border-white/5 rounded-t-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
-                      >
-                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary truncate pr-4">{v.name}</span>
-                        <div className="flex items-center justify-between">
-                          <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
-                          <span className="text-[7px] font-black text-gray-600 uppercase">Deck 1</span>
-                        </div>
-                      </button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await playVignette(v.url, 'deck2');
-                          } catch (err: any) {
-                            setStatusMessage({ type: 'error', text: 'Erro ao tocar vinheta: ' + (err.message || 'Falha no áudio') });
-                            setTimeout(() => setStatusMessage(null), 3000);
-                          }
-                        }}
-                        className="w-full h-16 bg-black/40 border border-white/5 rounded-b-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
-                      >
-                        <div className="flex items-center justify-between">
-                          <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
-                          <span className="text-[7px] font-black text-gray-600 uppercase">Deck 2</span>
-                        </div>
-                      </button>
-                    </div>
-                    
-                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingVignette(v);
-                          setVignetteForm({ name: v.name, url: v.url });
-                          setIsVignetteFormOpen(true);
-                        }}
-                        className="p-1.5 bg-black/80 rounded-lg text-gray-400 hover:text-white"
-                      >
-                        <Edit2 className="size-3" />
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteVignette(v.id);
-                        }}
-                        className="p-1.5 bg-black/80 rounded-lg text-red-400 hover:text-red-300"
-                      >
-                        <Trash2 className="size-3" />
-                      </button>
-                    </div>
+          {/* Cartucheira de Vinhetas */}
+          <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+                  <div className="flex flex-col gap-1">
+                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Cartucheira de Vinhetas</h2>
+                    <p className="text-[10px] text-gray-600 font-bold uppercase">Toque instantâneo de áudios</p>
                   </div>
-                ))}
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button 
+                      onClick={() => setIsManageModalOpen(true)}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white/5 text-gray-400 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                    >
+                      <Wand2 className="size-3" />
+                      IA
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setEditingVignette(null);
+                        setVignetteForm({ name: '', url: '', file: null });
+                        setIsVignetteFormOpen(true);
+                      }}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+                    >
+                      <Plus className="size-3" />
+                      Novo
+                    </button>
+                  </div>
+                </div>
                 
-                {vignettes.length === 0 && (
-                  <div className="col-span-full py-12 text-center border-2 border-dashed border-white/5 rounded-[32px]">
-                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Nenhuma vinheta cadastrada</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {vignettes.map((v) => (
+                    <div key={v.id} className="group relative">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={() => playVignette(v.url, 'deck1')}
+                          className="w-full h-16 bg-black/40 border border-white/5 rounded-t-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary truncate pr-4">{v.name}</span>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteVignette(v);
+                              }}
+                              className="p-1 hover:bg-red-500/20 rounded-md transition-colors"
+                            >
+                              <Trash2 className="size-2.5 text-red-500/50 hover:text-red-500" />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
+                            <span className="text-[7px] font-black text-gray-600 uppercase">Deck 1</span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => playVignette(v.url, 'deck2')}
+                          className="w-full h-16 bg-black/40 border border-white/5 rounded-b-2xl p-3 flex flex-col justify-between hover:bg-primary/10 hover:border-primary/30 transition-all text-left overflow-hidden group-active:scale-95"
+                        >
+                          <div className="flex items-center justify-between">
+                            <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
+                            <span className="text-[7px] font-black text-gray-600 uppercase">Deck 2</span>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {vignettes.length === 0 && !studioLoading && (
+                    <div className="col-span-full py-12 text-center border-2 border-dashed border-white/5 rounded-[32px]">
+                      <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Nenhuma vinheta encontrada no bucket /vinhetas</p>
+                    </div>
+                  )}
+                  {studioLoading && (
+                    <div className="col-span-full py-12 flex justify-center">
+                      <Loader2 className="size-6 text-primary animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Trilhas (Background Music) */}
+              <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+                  <div className="flex flex-col gap-1">
+                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Trilhas de Fundo</h2>
+                    <p className="text-[10px] text-gray-600 font-bold uppercase">Músicas instrumentais em loop</p>
                   </div>
-                )}
+                  <div className="flex items-center gap-4">
+                    <Volume2 className="size-4 text-gray-500" />
+                    <input 
+                      type="range" min="0" max="1" step="0.01" value={trackVolume}
+                      onChange={(e) => setTrackVolume(parseFloat(e.target.value))}
+                      className="w-32 h-1 bg-white/10 rounded-full appearance-none accent-primary"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {tracks.map((track) => (
+                    <button
+                      key={track.id}
+                      onClick={() => toggleTrack(track)}
+                      className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
+                        activeTrack === track.id 
+                          ? 'bg-primary/20 border-primary text-primary' 
+                          : 'bg-black/40 border-white/5 text-gray-400 hover:border-white/20'
+                      }`}
+                    >
+                      <div className={`size-10 rounded-xl flex items-center justify-center ${activeTrack === track.id ? 'bg-primary/20' : 'bg-white/5'}`}>
+                        {activeTrack === track.id ? <Loader2 className="size-5 animate-spin" /> : <Music2 className="size-5" />}
+                      </div>
+                      <div className="flex-1 text-left overflow-hidden">
+                        <p className="text-[10px] font-black uppercase tracking-widest truncate">{track.name}</p>
+                        <p className="text-[8px] font-bold uppercase opacity-50">{activeTrack === track.id ? 'Reproduzindo (Loop)' : 'Pronto'}</p>
+                      </div>
+                      {activeTrack === track.id && <Zap className="size-4 animate-pulse" />}
+                    </button>
+                  ))}
+                  {tracks.length === 0 && !studioLoading && (
+                    <div className="col-span-full py-8 text-center border-2 border-dashed border-white/5 rounded-[32px]">
+                      <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Nenhuma trilha encontrada no bucket /trilhas</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Comercial Queue Section */}
+            <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8 flex flex-col h-full">
+              <div className="flex flex-col gap-1 mb-8">
+                <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Fila de Comerciais</h2>
+                <p className="text-[10px] text-gray-600 font-bold uppercase">Programação de spots</p>
+              </div>
+
+              <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+                {/* Available Commercials */}
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Disponíveis</h3>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    {commercials.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5 group">
+                        <span className="text-[10px] font-bold text-gray-300 truncate flex-1">{c.name}</span>
+                        <button 
+                          onClick={() => addToQueue(c)}
+                          className="p-2 bg-white/5 rounded-lg text-primary hover:bg-primary/20 transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Plus className="size-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Current Queue */}
+                <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Fila Atual</h3>
+                    <button 
+                      onClick={clearQueue}
+                      disabled={queue.length === 0}
+                      className="text-[8px] font-black uppercase tracking-widest text-red-500 hover:text-red-400 disabled:opacity-30 transition-colors"
+                    >
+                      Limpar Fila
+                    </button>
+                    <span className="text-[8px] font-black px-2 py-0.5 bg-primary/20 text-primary rounded-full">{queue.length}</span>
+                  </div>
+                  
+                  <div className="flex-1 space-y-2 overflow-y-auto pr-2 custom-scrollbar">
+                    {queue.map((item, index) => (
+                      <div key={`${item.id}-${index}`} className="flex items-center gap-3 p-3 bg-primary/5 rounded-xl border border-primary/10">
+                        <span className="text-[8px] font-black text-primary/50">{index + 1}</span>
+                        <span className="text-[10px] font-bold text-white truncate flex-1">{item.name}</span>
+                        <button onClick={() => removeFromQueue(item.id)} className="text-gray-500 hover:text-red-400">
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {queue.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-white/5 rounded-3xl">
+                        <Loader2 className="size-8 text-gray-800 mb-4" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-600">Fila vazia</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={playNextInQueue}
+                    disabled={queue.length === 0 || isVignettePlaying}
+                    className="w-full py-4 bg-primary text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 hover:bg-primary/80 transition-all disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2"
+                  >
+                    {isVignettePlaying ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                    Disparar Próximo
+                  </button>
+                </div>
               </div>
             </section>
           </div>
-        </div>
 
-        {/* Right Sidebar - Tabs & Chat */}
+          {/* Right Sidebar - Tabs & Chat */}
         <aside className="hidden xl:flex flex-col gap-6 h-[calc(100vh-160px)]">
           <div className="bg-white/5 rounded-[40px] border border-white/10 p-2 flex gap-1">
             {[
@@ -1307,36 +1378,43 @@ export const LiveStudio: React.FC = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleSaveVignette} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nome da Vinheta</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={vignetteForm.name}
-                    onChange={(e) => setVignetteForm({ ...vignetteForm, name: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
-                    placeholder="Ex: Vinheta Abertura"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">URL do Áudio (MP3)</label>
-                  <input 
-                    type="url" 
-                    required
-                    value={vignetteForm.url}
-                    onChange={(e) => setVignetteForm({ ...vignetteForm, url: e.target.value })}
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
-                    placeholder="https://exemplo.com/audio.mp3"
-                  />
-                </div>
-                <button 
-                  type="submit"
-                  className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20"
-                >
-                  Salvar Vinheta
-                </button>
-              </form>
+                <form onSubmit={handleSaveVignette} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nome da Vinheta</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={vignetteForm.name}
+                      onChange={(e) => setVignetteForm({ ...vignetteForm, name: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+                      placeholder="Ex: Vinheta Abertura"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo de Áudio (MP3/WAV)</label>
+                    <div className="relative group">
+                      <input 
+                        type="file" 
+                        accept="audio/*"
+                        onChange={(e) => setVignetteForm({ ...vignetteForm, file: e.target.files?.[0] || null })}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm flex items-center justify-between group-hover:border-primary/30 transition-colors">
+                        <span className="text-gray-500 truncate">
+                          {vignetteForm.file ? vignetteForm.file.name : 'Clique para selecionar arquivo'}
+                        </span>
+                        <Plus className="size-4 text-gray-500" />
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={isGeneratingVignette}
+                    className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+                  >
+                    {isGeneratingVignette ? <Loader2 className="size-5 animate-spin mx-auto" /> : 'Salvar Vinheta'}
+                  </button>
+                </form>
             </motion.div>
           </div>
         )}
@@ -1389,6 +1467,41 @@ export const LiveStudio: React.FC = () => {
           margin-top: 80px;
         }
       `}</style>
+
+      {/* Status Bar */}
+      <footer className="h-10 bg-black/80 border-t border-white/5 px-6 flex items-center justify-between text-[8px] font-black uppercase tracking-[0.2em] text-gray-500">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className={`size-1.5 rounded-full ${isInitialized ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+            <span>Motor de Áudio: {isInitialized ? 'Operacional' : 'Inativo'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Activity className="size-3 text-primary" />
+            <span>Latência: 12ms</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="size-3 text-gray-400" />
+            <span>Ouvintes: 0</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className={`size-1.5 rounded-full ${isMicActive ? 'bg-red-500 animate-pulse' : 'bg-gray-700'}`} />
+            <span>Microfone: {isMicActive ? 'No Ar' : 'Mudo'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`size-1.5 rounded-full ${activeTrack ? 'bg-primary animate-pulse' : 'bg-gray-700'}`} />
+            <span>Trilha: {activeTrack ? 'Ativa' : 'Parada'}</span>
+          </div>
+          <button 
+            onClick={stopAllVignettes}
+            className="px-3 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded-full hover:bg-red-500 hover:text-white transition-all"
+          >
+            Pânico (Stop All)
+          </button>
+        </div>
+      </footer>
     </div>
   );
 };

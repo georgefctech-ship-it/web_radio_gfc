@@ -189,7 +189,7 @@ export const useAudioMixer = () => {
     socket.emit('vignette:end');
   }, []);
 
-  const playVignette = useCallback(async (url: string, deck: 'deck1' | 'deck2' = 'deck1') => {
+  const playVignette = useCallback(async (url: string, deck: 'deck1' | 'deck2' = 'deck1', loop: boolean = false) => {
     if (!audioContextRef.current) await initialize();
     const ctx = audioContextRef.current!;
 
@@ -216,7 +216,7 @@ export const useAudioMixer = () => {
       try {
         audioBuffer = await ctx.decodeAudioData(arrayBuffer);
       } catch (err) {
-        // Fallback PCM logic... (omitted for brevity but kept in mind)
+        // Fallback PCM logic...
         const numSamples = Math.floor(arrayBuffer.byteLength / 2);
         const pcmData = new Int16Array(arrayBuffer, 0, numSamples);
         audioBuffer = ctx.createBuffer(1, numSamples, 24000);
@@ -226,6 +226,7 @@ export const useAudioMixer = () => {
 
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
+      source.loop = loop;
 
       const targetGain = deck === 'deck1' ? deck1GainRef.current! : deck2GainRef.current!;
       source.connect(targetGain);
@@ -233,18 +234,22 @@ export const useAudioMixer = () => {
       const vignetteId = Math.random().toString(36).substring(7);
       activeVignettesRef.current.set(vignetteId, { source, gain: targetGain, deck });
 
-      socket.emit('vignette:start', { url, deck });
+      socket.emit('vignette:start', { url, deck, loop });
       source.start(0);
       setIsVignettePlaying(true);
       
       source.onended = () => {
-        activeVignettesRef.current.delete(vignetteId);
-        if (activeVignettesRef.current.size === 0) {
-          socket.emit('vignette:end');
-          setIsVignettePlaying(false);
+        if (!source.loop) {
+          activeVignettesRef.current.delete(vignetteId);
+          if (activeVignettesRef.current.size === 0) {
+            socket.emit('vignette:end');
+            setIsVignettePlaying(false);
+          }
+          source.disconnect();
         }
-        source.disconnect();
       };
+
+      return { id: vignetteId, source };
     } catch (err) {
       console.error("Failed to play vignette:", err);
       throw err; 
