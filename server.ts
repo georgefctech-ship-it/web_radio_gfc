@@ -66,6 +66,15 @@ async function startServer() {
     });
   });
 
+  app.get("/api/icecast-config", (req, res) => {
+    res.json({
+      server: process.env.ICECAST_SERVER || "Não configurado",
+      port: process.env.ICECAST_PORT || "8000 (Padrão)",
+      mount: process.env.ICECAST_MOUNT || "/live",
+      hasPassword: !!process.env.ICECAST_PASSWORD
+    });
+  });
+
   io.on("connection", (socket) => {
     console.log(`[Socket] New connection: ${socket.id} (Total: ${io.engine.clientsCount})`);
     
@@ -122,6 +131,44 @@ async function startServer() {
       messages.push(message);
       if (messages.length > 50) messages.shift();
       io.emit("chat:message", message);
+    });
+
+    socket.on("live:test-connection", () => {
+      const server = process.env.ICECAST_SERVER;
+      const port = parseInt(process.env.ICECAST_PORT || "8000");
+      const password = process.env.ICECAST_PASSWORD;
+
+      if (!server || !password) {
+        socket.emit("live:error", { message: "Configuração Icecast incompleta nos Segredos (Secrets)." });
+        return;
+      }
+
+      const sanitizedServer = server.replace(/^https?:\/\//, '').split(':')[0];
+      
+      const options = {
+        hostname: sanitizedServer,
+        port: port,
+        path: '/',
+        method: 'GET',
+        family: 4,
+        timeout: 5000
+      };
+
+      const req = httpRequest(options, (res) => {
+        socket.emit("live:error", { 
+          message: `Conexão física com o servidor OK (Status ${res.statusCode}). Se o erro persistir ao transmitir, verifique a senha de SOURCE.` 
+        });
+      });
+
+      req.on('error', (err: any) => {
+        let msg = `Falha no teste de conexão: ${err.message}`;
+        if (err.code === 'ECONNREFUSED') {
+          msg = `Porta ${port} recusada em ${sanitizedServer}. DICA: Use a porta de SOURCE (ex: 8000), não a de ouvintes (ex: 19793).`;
+        }
+        socket.emit("live:error", { message: msg });
+      });
+
+      req.end();
     });
 
     // Live Streaming Logic

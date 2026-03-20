@@ -93,6 +93,7 @@ export const LiveStudio: React.FC = () => {
   const [serverLatency, setServerLatency] = useState<number | null>(null);
   const [sessionHistory, setSessionHistory] = useState<{ id: string, time: string, event: string, type: 'info' | 'success' | 'warning' | 'error' }[]>([]);
   const [peerStats, setPeerStats] = useState<Record<string, { latency: number, status: string }>>({});
+  const [icecastConfig, setIcecastConfig] = useState<{ server: string, port: string, mount: string, hasPassword: boolean } | null>(null);
 
   const peerConnections = useRef<Record<string, RTCPeerConnection>>({});
 
@@ -466,6 +467,12 @@ export const LiveStudio: React.FC = () => {
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+
+    // Fetch Icecast Config for diagnostics
+    fetch('/api/icecast-config')
+      .then(res => res.json())
+      .then(data => setIcecastConfig(data))
+      .catch(err => console.error("Erro ao buscar config Icecast:", err));
 
     return () => {
       clearInterval(serverMonitor);
@@ -867,6 +874,22 @@ export const LiveStudio: React.FC = () => {
                     <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Encoder</p>
                     <p className="text-[10px] font-bold text-white">Opus 128Kbps @ 48kHz</p>
                   </div>
+                  {icecastConfig && (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Icecast Target</p>
+                        <button 
+                          onClick={() => socket.emit('live:test-connection')}
+                          className="text-[6px] font-black uppercase tracking-widest text-primary hover:underline"
+                        >
+                          Testar Conexão
+                        </button>
+                      </div>
+                      <p className="text-[10px] font-bold text-primary truncate">
+                        {icecastConfig.server}:{icecastConfig.port}
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Uptime</p>
                     <p className="text-[10px] font-bold text-white">00:00:00</p>
