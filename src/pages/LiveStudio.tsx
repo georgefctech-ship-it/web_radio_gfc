@@ -33,6 +33,9 @@ export const LiveStudio: React.FC = () => {
     isMonitoring,
     isInitialized,
     isVignettePlaying,
+    isStreaming,
+    startStreaming,
+    stopStreaming,
     crossfader,
     setCrossfader,
     isDucking,
@@ -370,6 +373,9 @@ export const LiveStudio: React.FC = () => {
           await toggleMic();
         }
         
+        // Start Icecast streaming
+        startStreaming();
+
         // Broadcast via Supabase Realtime as requested
         const channel = supabase.channel('radio-studio');
         await channel.subscribe(async (status) => {
@@ -390,15 +396,17 @@ export const LiveStudio: React.FC = () => {
           }
         });
 
-        socket.emit('live:start');
         setIsOnAir(true);
-        setStatusMessage({ type: 'success', text: 'Você está no ar! Fale agora.' });
+        setStatusMessage({ type: 'success', text: 'Você está no ar! Transmitindo para Icecast.' });
         setTimeout(() => setStatusMessage(null), 3000);
       } catch (err) {
         console.error("[Studio] Erro ao iniciar transmissão:", err);
-        setStatusMessage({ type: 'error', text: 'Erro ao acessar microfone. Verifique as permissões.' });
+        setStatusMessage({ type: 'error', text: 'Erro ao acessar microfone ou iniciar stream.' });
       }
     } else {
+      // Stop Icecast streaming
+      stopStreaming();
+
       // Broadcast stop signal
       const channel = supabase.channel('radio-studio');
       await channel.subscribe(async (status) => {
@@ -411,7 +419,6 @@ export const LiveStudio: React.FC = () => {
         }
       });
 
-      socket.emit('live:stop');
       setIsOnAir(false);
       
       // Stop mic when stopping broadcast (optional, but cleaner)
@@ -734,37 +741,91 @@ export const LiveStudio: React.FC = () => {
                 </button>
               </div>
 
-              {/* Status Indicators */}
+              {/* Status Indicators & VU Meters */}
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
-                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
-                  <div className={`size-10 rounded-xl flex items-center justify-center ${serverStatus === 'online' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
-                    <Radio className="size-5" />
+                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex flex-col gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`size-10 rounded-xl flex items-center justify-center ${serverStatus === 'online' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
+                      <Radio className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Server Status</p>
+                      <p className={`text-xs font-black uppercase ${serverStatus === 'online' ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {serverStatus === 'online' ? 'Online' : 'Offline'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Server Status</p>
-                    <p className={`text-xs font-black uppercase ${serverStatus === 'online' ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {serverStatus === 'online' ? 'Online' : 'Offline'}
-                    </p>
+                  <div className="flex justify-between items-end h-24 gap-1">
+                    <VUMeter analyser={getAnalyser('deck1')} />
+                    <VUMeter analyser={getAnalyser('deck2')} />
+                    <VUMeter analyser={getAnalyser('mic')} />
+                    <VUMeter analyser={getAnalyser('master')} />
+                  </div>
+                  <div className="flex justify-between text-[6px] font-black text-gray-500 uppercase tracking-tighter">
+                    <span>D1</span>
+                    <span>D2</span>
+                    <span>MIC</span>
+                    <span>MST</span>
                   </div>
                 </div>
 
-                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
-                  <div className="size-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center">
-                    <Activity className="size-5" />
+                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex flex-col gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="size-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center">
+                      <Activity className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Health</p>
+                      <p className="text-xs font-black uppercase text-primary">Excellent</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Health</p>
-                    <p className="text-xs font-black uppercase text-primary">Excellent</p>
+                  <div className="flex-1 flex flex-col justify-center gap-2">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Crossfader</p>
+                    <input 
+                      type="range" 
+                      min="-1" 
+                      max="1" 
+                      step="0.01" 
+                      value={crossfader}
+                      onChange={(e) => setCrossfader(parseFloat(e.target.value))}
+                      className="w-full accent-primary bg-white/10 rounded-lg h-2 appearance-none cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[8px] font-black text-gray-500">
+                      <span>DECK 1</span>
+                      <span>DECK 2</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
-                  <div className="size-10 rounded-xl bg-white/5 text-white flex items-center justify-center">
-                    <Users className="size-5" />
+                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex flex-col gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="size-10 rounded-xl bg-white/5 text-white flex items-center justify-center">
+                      <Users className="size-5" />
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Listeners</p>
+                      <p className="text-xs font-black uppercase text-white">{Object.keys(peerConnections.current).length}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Listeners</p>
-                    <p className="text-xs font-black uppercase text-white">{Object.keys(peerConnections.current).length}</p>
+                  <div className="flex-1 flex flex-col justify-center gap-2">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Mic Volume</p>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={toggleMic}
+                        className={`p-2 rounded-lg transition-colors ${isMicActive ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-gray-500'}`}
+                      >
+                        {isMicActive ? <Mic className="size-4" /> : <MicOff className="size-4" />}
+                      </button>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="2" 
+                        step="0.01" 
+                        value={micVolume}
+                        onChange={(e) => updateMicVolume(parseFloat(e.target.value))}
+                        className="flex-1 accent-primary bg-white/10 rounded-lg h-2 appearance-none cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

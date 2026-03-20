@@ -33,7 +33,9 @@ export const useAudioMixer = () => {
   const [isDucking, setIsDucking] = useState(true); // Talkover mode
   const [vignetteVolume, setVignetteVolume] = useState(1);
   const [isVignettePlaying, setIsVignettePlaying] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const activeVignettesRef = useRef<Map<string, { source: AudioBufferSourceNode, gain: GainNode, deck: 'deck1' | 'deck2' }>>(new Map());
 
   const initialize = useCallback(async () => {
@@ -271,6 +273,41 @@ export const useAudioMixer = () => {
     }
   }, [isMonitoring]);
 
+  const startStreaming = useCallback(() => {
+    if (isStreaming || !destinationRef.current) return;
+    
+    const stream = destinationRef.current.stream;
+    // Use Opus if available
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+      ? 'audio/webm;codecs=opus' 
+      : 'audio/webm';
+      
+    const recorder = new MediaRecorder(stream, {
+      mimeType,
+      audioBitsPerSecond: 96000
+    });
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        socket.emit('live:stream-data', event.data);
+      }
+    };
+
+    recorder.start(200); // 200ms chunks for low latency
+    mediaRecorderRef.current = recorder;
+    setIsStreaming(true);
+    socket.emit('live:start');
+  }, [isStreaming]);
+
+  const stopStreaming = useCallback(() => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    setIsStreaming(false);
+    socket.emit('live:stop');
+  }, []);
+
   const getAnalyser = useCallback((type: 'mic' | 'deck1' | 'deck2' | 'master' = 'master') => {
     if (type === 'mic') return micAnalyserRef.current;
     if (type === 'deck1') return deck1AnalyserRef.current;
@@ -296,6 +333,9 @@ export const useAudioMixer = () => {
     isMonitoring,
     isInitialized,
     isVignettePlaying,
+    isStreaming,
+    startStreaming,
+    stopStreaming,
     crossfader,
     setCrossfader,
     isDucking,

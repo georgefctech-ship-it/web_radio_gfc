@@ -1,11 +1,12 @@
 import express from "express";
 import cors from "cors";
-import { createServer } from "http";
+import { createServer, request as httpRequest } from "http";
 import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { PassThrough } from "stream";
 
 dotenv.config();
 
@@ -52,6 +53,10 @@ async function startServer() {
   const stationVotes: Record<string, { likes: number, dislikes: number }> = {};
   let isLive = false;
   let liveBroadcasterId: string | null = null;
+  
+  // Icecast Relay State
+  let icecastRequest: any = null;
+  let icecastStream: PassThrough | null = null;
 
   app.get("/api/socket-health", (req, res) => {
     res.json({ 
@@ -63,7 +68,6 @@ async function startServer() {
 
   io.on("connection", (socket) => {
     console.log(`[Socket] New connection: ${socket.id} (Total: ${io.engine.clientsCount})`);
-    console.log(`[Socket] Transport: ${socket.conn.transport.name} for ${socket.id}`);
     
     socket.conn.on("upgrade", () => {
       console.log(`[Socket] Transport upgraded to ${socket.conn.transport.name} for ${socket.id}`);
@@ -121,13 +125,69 @@ async function startServer() {
     });
 
     // Live Streaming Logic
-    socket.on("live:start", () => {
+    socket.on("live:start", (config?: any) => {
       isLive = true;
       liveBroadcasterId = socket.id;
       io.emit("live:status", { isLive, broadcasterId: liveBroadcasterId });
       console.log("Live started by:", socket.id);
+      
+      // Initialize Icecast Relay if configured
+      const server = process.env.ICECAST_SERVER;
+      const port = parseInt(process.env.ICECAST_PORT || "8000");
+      const mount = process.env.ICECAST_MOUNT || "/live";
+      const password = process.env.ICECAST_PASSWORD;
+
+      if (server && password) {
+        console.log(`[Icecast] Connecting to ${server}:${port}${mount}...`);
+        
+        icecastStream = new PassThrough();
+        
+        const options = {
+          hostname: server,
+          port: port,
+          path: mount,
+          method: 'SOURCE',
+          headers: {
+            'Authorization': 'Basic ' + Buffer.from('source:' + password).toString('base64'),
+            'Content-Type': 'audio/ogg', // Default to Opus in Ogg
+            'ice-name': process.env.ICECAST_NAME || 'Web Radio',
+            'ice-url': process.env.ICECAST_URL || 'https://caster.fm',
+            'ice-genre': process.env.ICECAST_GENRE || 'Radio',
+            'ice-description': process.env.ICECAST_DESCRIPTION || 'Live Broadcast',
+            'ice-public': '1',
+            'ice-bitrate': '96',
+            'Expect': '100-continue'
+          }
+        };
+
+        icecastRequest = httpRequest(options, (res) => {
+          console.log(`[Icecast] Response: ${res.statusCode}`);
+          res.on('data', (chunk) => console.log(`[Icecast] Data: ${chunk}`));
+        });
+
+        icecastRequest.on('error', (err: any) => {
+          console.error(`[Icecast] Request Error:`, err);
+          socket.emit("live:error", { message: "Failed to connect to Icecast server" });
+          stopIcecast();
+        });
+
+        icecastStream.pipe(icecastRequest);
+        console.log("[Icecast] Stream relay initialized.");
+      }
+
       // Notify all listeners to request stream
       socket.broadcast.emit("webrtc:broadcast-ready");
+    });
+
+    socket.on("live:stream-data", (data: Buffer | ArrayBuffer) => {
+      if (socket.id === liveBroadcasterId && icecastStream) {
+        // Forward data to Icecast
+        if (Buffer.isBuffer(data)) {
+          icecastStream.write(data);
+        } else {
+          icecastStream.write(Buffer.from(data));
+        }
+      }
     });
 
     socket.on("live:stop", () => {
@@ -136,8 +196,21 @@ async function startServer() {
         liveBroadcasterId = null;
         io.emit("live:status", { isLive, broadcasterId: null });
         console.log("Live stopped by:", socket.id);
+        stopIcecast();
       }
     });
+
+    const stopIcecast = () => {
+      if (icecastStream) {
+        icecastStream.end();
+        icecastStream = null;
+      }
+      if (icecastRequest) {
+        icecastRequest.end();
+        icecastRequest = null;
+      }
+      console.log("[Icecast] Stream relay stopped.");
+    };
 
     socket.on("vignette:start", (data) => {
       // If no broadcaster is set, the one starting the vignette becomes the broadcaster
@@ -188,8 +261,11 @@ async function startServer() {
         isLive = false;
         liveBroadcasterId = null;
         io.emit("live:status", { isLive, broadcasterId: null });
+        stopIcecast();
       }
     });
+    
+    // ... (rest of socket handlers)
   });
 
   // API routes
