@@ -27,7 +27,7 @@ console.log("[Socket] Origin:", typeof window !== 'undefined' ? window.location.
 
 export const socket = io(socketUrl, {
   path: '/socket.io/',
-  transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
+  transports: ['polling', 'websocket'], // Try polling first for better reliability through proxies
   upgrade: true, // Allow upgrading from polling to websocket
   reconnection: true,
   reconnectionAttempts: Infinity, // Keep trying forever

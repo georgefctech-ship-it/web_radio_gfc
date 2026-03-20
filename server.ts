@@ -132,13 +132,16 @@ async function startServer() {
       console.log("Live started by:", socket.id);
       
       // Initialize Icecast Relay if configured
-      const server = process.env.ICECAST_SERVER;
-      const port = parseInt(process.env.ICECAST_PORT || "8000");
+      let server = process.env.ICECAST_SERVER;
+      let port = parseInt(process.env.ICECAST_PORT || "8000");
       const mount = process.env.ICECAST_MOUNT || "/live";
       const password = process.env.ICECAST_PASSWORD;
 
       if (server && password) {
-        console.log(`[Icecast] Connecting to ${server}:${port}${mount}...`);
+        // Sanitize server: remove http://, https:// and trailing ports
+        server = server.replace(/^https?:\/\//, '').split(':')[0];
+        
+        console.log(`[Icecast] Attempting connection to ${server}:${port}${mount}...`);
         
         icecastStream = new PassThrough();
         
@@ -147,27 +150,40 @@ async function startServer() {
           port: port,
           path: mount,
           method: 'SOURCE',
+          family: 4, // Force IPv4
           headers: {
             'Authorization': 'Basic ' + Buffer.from('source:' + password).toString('base64'),
-            'Content-Type': 'audio/ogg', // Default to Opus in Ogg
+            'Content-Type': 'audio/ogg',
             'ice-name': process.env.ICECAST_NAME || 'Web Radio',
             'ice-url': process.env.ICECAST_URL || 'https://caster.fm',
             'ice-genre': process.env.ICECAST_GENRE || 'Radio',
             'ice-description': process.env.ICECAST_DESCRIPTION || 'Live Broadcast',
             'ice-public': '1',
             'ice-bitrate': '96',
-            'Expect': '100-continue'
+            'Expect': '100-continue',
+            'User-Agent': 'RadioGeorgeFctech/1.0'
           }
         };
 
         icecastRequest = httpRequest(options, (res) => {
-          console.log(`[Icecast] Response: ${res.statusCode}`);
-          res.on('data', (chunk) => console.log(`[Icecast] Data: ${chunk}`));
+          console.log(`[Icecast] Connected! Status: ${res.statusCode}`);
+          if (res.statusCode !== 200 && res.statusCode !== 100) {
+            socket.emit("live:error", { 
+              message: `Servidor Icecast retornou erro ${res.statusCode}. Verifique a senha de SOURCE.` 
+            });
+          }
+          res.on('data', (chunk) => console.log(`[Icecast] Response: ${chunk}`));
         });
 
         icecastRequest.on('error', (err: any) => {
-          console.error(`[Icecast] Request Error:`, err);
-          socket.emit("live:error", { message: "Failed to connect to Icecast server" });
+          console.error(`[Icecast] Connection Failed:`, err.message);
+          let userMessage = `Erro de conexão com Icecast (${server}:${port}): ${err.message}`;
+          
+          if (err.code === 'ECONNREFUSED') {
+            userMessage = `Conexão recusada por ${server}:${port}. DICA: Verifique se você está usando a porta de TRANSMISSÃO (geralmente 8000) e não a porta de OUVINTES (${port}). Certifique-se que o servidor está 'ON' no painel da Caster.fm.`;
+          }
+          
+          socket.emit("live:error", { message: userMessage });
           stopIcecast();
         });
 

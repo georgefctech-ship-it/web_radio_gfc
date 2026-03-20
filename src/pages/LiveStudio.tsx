@@ -128,6 +128,13 @@ export const LiveStudio: React.FC = () => {
   useEffect(() => {
     socket.on('listeners:count', (count: number) => setListeners(count));
     
+    socket.on('live:error', (err: { message: string }) => {
+      console.error("[Studio] Live Error:", err.message);
+      setStatusMessage({ type: 'error', text: err.message });
+      setIsOnAir(false);
+      setTimeout(() => setStatusMessage(null), 5000);
+    });
+    
     // WebRTC Signaling for listeners
     const handleStreamRequest = async ({ listenerId }: { listenerId: string }) => {
       // Use a ref for isOnAir to avoid dependency cycle if needed, 
