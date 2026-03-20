@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2, Zap, RefreshCw } from 'lucide-react';
+import { Mic, MicOff, Radio, Play, Square, Volume2, Users, Settings, X, Activity, Plus, Trash2, Edit2, LogOut, Wand2, Loader2, Music2, Zap, RefreshCw, Power } from 'lucide-react';
 import { socket } from '../lib/socket';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAudioStudio } from '../hooks/useAudioStudio';
@@ -52,6 +52,7 @@ export const LiveStudio: React.FC = () => {
     clearQueue,
     playNextInQueue,
     uploadAudio,
+    saveExternalAudio,
     deleteAudio,
     refresh: refreshStudio
   } = useAudioStudio();
@@ -76,7 +77,8 @@ export const LiveStudio: React.FC = () => {
     name: '', 
     url: '', 
     file: null as File | null,
-    bucket: 'vinhetas' as 'vinhetas' | 'trilhas' | 'comerciais'
+    bucket: 'vinhetas' as 'vinhetas' | 'trilhas' | 'comerciais',
+    mode: 'file' as 'file' | 'url'
   });
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -470,24 +472,36 @@ export const LiveStudio: React.FC = () => {
     e.preventDefault();
     setIsGeneratingVignette(true);
     try {
-      if (vignetteForm.file) {
+      if (vignetteForm.mode === 'file') {
+        if (!vignetteForm.file) {
+          throw new Error("Por favor, selecione um arquivo.");
+        }
         const success = await uploadAudio(vignetteForm.bucket, vignetteForm.file, vignetteForm.name);
         if (success) {
           setStatusMessage({ type: 'success', text: 'Arquivo enviado com sucesso!' });
         } else {
-          throw new Error("Erro ao enviar arquivo.");
+          throw new Error("Erro ao enviar arquivo para o storage.");
         }
-      } else if (vignetteForm.url) {
-        setStatusMessage({ type: 'error', text: 'Por favor, selecione um arquivo para enviar.' });
-        return;
+      } else {
+        if (!vignetteForm.url) {
+          throw new Error("Por favor, insira a URL do áudio.");
+        }
+        const type = vignetteForm.bucket === 'vinhetas' ? 'vignette' : vignetteForm.bucket === 'trilhas' ? 'track' : 'commercial';
+        const success = await saveExternalAudio(type, vignetteForm.name, vignetteForm.url);
+        if (success) {
+          setStatusMessage({ type: 'success', text: 'URL salva com sucesso!' });
+        } else {
+          throw new Error("Erro ao salvar URL no banco de dados.");
+        }
       }
       setIsVignetteFormOpen(false);
-      setVignetteForm({ name: '', url: '', file: null, bucket: 'vinhetas' });
+      setVignetteForm({ name: '', url: '', file: null, bucket: 'vinhetas', mode: 'file' });
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Erro ao salvar arquivo.' });
+      console.error('Save error:', err);
+      setStatusMessage({ type: 'error', text: err.message || 'Erro ao salvar áudio.' });
     } finally {
       setIsGeneratingVignette(false);
-      setTimeout(() => setStatusMessage(null), 3000);
+      setTimeout(() => setStatusMessage(null), 5000);
     }
   };
 
@@ -498,7 +512,7 @@ export const LiveStudio: React.FC = () => {
 
   const confirmDeleteVignette = async () => {
     if (!vignetteToDelete) return;
-    const success = await deleteAudio(vignetteToDelete.type === 'track' ? 'trilhas' : vignetteToDelete.type === 'commercial' ? 'comerciais' : 'vinhetas', vignetteToDelete.fileName);
+    const success = await deleteAudio(vignetteToDelete.type === 'track' ? 'trilhas' : vignetteToDelete.type === 'commercial' ? 'comerciais' : 'vinhetas', vignetteToDelete.fileName, vignetteToDelete.id);
     if (success) {
       setStatusMessage({ type: 'success', text: 'Arquivo excluído!' });
     } else {
@@ -643,48 +657,159 @@ export const LiveStudio: React.FC = () => {
             )}
           </div>
 
-          <button 
-            onClick={toggleMonitoring}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${
-              isMonitoring 
-                ? 'bg-primary/20 border-primary text-primary' 
-                : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-            }`}
-            title={isMonitoring ? "Desativar Monitoramento Local" : "Ativar Monitoramento Local"}
-          >
-            <Volume2 className="size-4" />
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              {isMonitoring ? 'Monitorando' : 'Monitorar'}
-            </span>
-          </button>
-          
-          <button 
-            onClick={stopAllVignettes}
-            className="px-8 py-4 bg-red-600/20 text-red-500 border-2 border-red-500/50 rounded-3xl font-black uppercase tracking-[0.2em] text-xs hover:bg-red-600 hover:text-white hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-2xl shadow-red-600/20 group"
-            title="PARAR TUDO (Pânico)"
-          >
-            <Zap className="size-5 fill-current group-hover:animate-bounce" />
-            PÂNICO
-          </button>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsManageModalOpen(true)}
+              className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-400 hover:bg-white/10 hover:text-white transition-all"
+              title="Configurações de Transmissão"
+            >
+              <Settings className="size-5" />
+            </button>
 
-          <button 
-            onClick={handleToggleOnAir}
-            className={`px-6 sm:px-8 py-3 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center gap-3 w-full sm:w-auto justify-center hover:scale-105 active:scale-95 ${
-              isOnAir 
-                ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' 
-                : 'bg-white text-black shadow-lg shadow-white/10'
-            }`}
-          >
-            {isOnAir ? <Square className="size-4 fill-current" /> : <Activity className="size-4" />}
-            {isOnAir ? 'NO AR' : 'ENTRAR NO AR'}
-          </button>
+            <button 
+              onClick={toggleMonitoring}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all ${
+                isMonitoring 
+                  ? 'bg-primary/20 border-primary text-primary' 
+                  : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+              }`}
+              title={isMonitoring ? "Desativar Monitoramento Local" : "Ativar Monitoramento Local"}
+            >
+              <Volume2 className="size-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                {isMonitoring ? 'Monitorando' : 'Monitorar'}
+              </span>
+            </button>
+            
+            <button 
+              onClick={stopAllVignettes}
+              className="px-8 py-4 bg-red-600/20 text-red-500 border-2 border-red-500/50 rounded-3xl font-black uppercase tracking-[0.2em] text-xs hover:bg-red-600 hover:text-white hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-2xl shadow-red-600/20 group"
+              title="PARAR TUDO (Pânico)"
+            >
+              <Zap className="size-5 fill-current group-hover:animate-bounce" />
+              PÂNICO
+            </button>
+
+            <button 
+              onClick={handleToggleOnAir}
+              className={`px-6 sm:px-8 py-3 rounded-2xl font-black uppercase tracking-widest transition-all flex items-center gap-3 w-full sm:w-auto justify-center hover:scale-105 active:scale-95 ${
+                isOnAir 
+                  ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/40' 
+                  : 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+              }`}
+            >
+              {isOnAir ? <Square className="size-4 fill-current" /> : <Power className="size-4" />}
+              {isOnAir ? 'DESCONECTAR' : 'CONECTAR'}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="grid xl:grid-cols-[1fr_350px] gap-8">
         <div className="space-y-8">
+          {/* Broadcast Dashboard (Inspired by Caster.fm) */}
+          <section className="bg-[#1a1a1a] rounded-[40px] border border-white/10 p-6 sm:p-8 shadow-2xl overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/50 opacity-50" />
+            
+            <div className="flex flex-col lg:flex-row gap-8 items-center">
+              {/* Main Control */}
+              <div className="flex flex-col items-center gap-4 min-w-[200px]">
+                <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+                  isOnAir ? 'bg-red-500/20 border-red-500 text-red-500 animate-pulse' : 'bg-white/5 border-white/10 text-gray-500'
+                }`}>
+                  <div className={`size-2 rounded-full ${isOnAir ? 'bg-red-500' : 'bg-gray-700'}`} />
+                  {isOnAir ? 'ON AIR' : 'OFF AIR'}
+                </div>
+
+                <button 
+                  onClick={handleToggleOnAir}
+                  className={`w-48 h-24 rounded-3xl font-black uppercase tracking-[0.2em] text-sm transition-all flex flex-col items-center justify-center gap-2 shadow-2xl ${
+                    isOnAir 
+                      ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-600/30' 
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/30'
+                  }`}
+                >
+                  <Power className="size-6" />
+                  {isOnAir ? 'Disconnect' : 'Connect'}
+                </button>
+              </div>
+
+              {/* Status Indicators */}
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full">
+                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
+                  <div className={`size-10 rounded-xl flex items-center justify-center ${serverStatus === 'online' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-red-500/20 text-red-500'}`}>
+                    <Radio className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Server Status</p>
+                    <p className={`text-xs font-black uppercase ${serverStatus === 'online' ? 'text-emerald-500' : 'text-red-500'}`}>
+                      {serverStatus === 'online' ? 'Online' : 'Offline'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
+                  <div className="size-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center">
+                    <Activity className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Health</p>
+                    <p className="text-xs font-black uppercase text-primary">Excellent</p>
+                  </div>
+                </div>
+
+                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 flex items-center gap-4">
+                  <div className="size-10 rounded-xl bg-white/5 text-white flex items-center justify-center">
+                    <Users className="size-5" />
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Listeners</p>
+                    <p className="text-xs font-black uppercase text-white">{Object.keys(peerConnections.current).length}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Info */}
+              <div className="flex-1 space-y-4 w-full">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col w-full">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Current Song / Program</p>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        value={broadcastTitle}
+                        onChange={(e) => setBroadcastTitle(e.target.value)}
+                        className="bg-transparent border-b border-white/10 text-sm font-bold text-white focus:outline-none focus:border-primary py-1 w-full"
+                      />
+                      <button 
+                        onClick={() => {
+                           setStatusMessage({ type: 'success', text: 'Metadados atualizados!' });
+                           setTimeout(() => setStatusMessage(null), 2000);
+                        }}
+                        className="px-3 py-1 bg-primary/10 text-primary border border-primary/20 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+                      >
+                        Update
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Encoder</p>
+                    <p className="text-[10px] font-bold text-white">Opus 128Kbps @ 48kHz</p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">Uptime</p>
+                    <p className="text-[10px] font-bold text-white">00:00:00</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Broadcast Control (Cast) - Integrated at the top */}
-          <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8">
+          <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8 hidden">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
               <div className="flex flex-col gap-1">
                 <h2 className="text-sm font-black uppercase tracking-widest text-primary">Controle de Transmissão (Cast)</h2>
@@ -978,7 +1103,7 @@ export const LiveStudio: React.FC = () => {
                     <button 
                       onClick={() => {
                         setEditingVignette(null);
-                        setVignetteForm({ name: '', url: '', file: null, bucket: 'vinhetas' });
+                        setVignetteForm({ name: '', url: '', file: null, bucket: 'vinhetas', mode: 'file' });
                         setIsVignetteFormOpen(true);
                       }}
                       className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all hover:scale-105 active:scale-95"
@@ -1051,7 +1176,7 @@ export const LiveStudio: React.FC = () => {
                     <button 
                       onClick={() => {
                         setEditingVignette(null);
-                        setVignetteForm({ name: '', url: '', file: null, bucket: 'trilhas' });
+                        setVignetteForm({ name: '', url: '', file: null, bucket: 'trilhas', mode: 'file' });
                         setIsVignetteFormOpen(true);
                       }}
                       className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all hover:scale-105 active:scale-95"
@@ -1123,7 +1248,7 @@ export const LiveStudio: React.FC = () => {
                     <button 
                       onClick={() => {
                         setEditingVignette(null);
-                        setVignetteForm({ name: '', url: '', file: null, bucket: 'comerciais' });
+                        setVignetteForm({ name: '', url: '', file: null, bucket: 'comerciais', mode: 'file' });
                         setIsVignetteFormOpen(true);
                       }}
                       className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all hover:scale-105 active:scale-95"
@@ -1466,6 +1591,35 @@ export const LiveStudio: React.FC = () => {
                       ))}
                     </div>
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Origem do Áudio</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVignetteForm({ ...vignetteForm, mode: 'file' })}
+                        className={`py-2 rounded-xl text-[8px] font-black uppercase tracking-widest border transition-all ${
+                          vignetteForm.mode === 'file' 
+                            ? 'bg-primary/20 border-primary text-primary' 
+                            : 'bg-white/5 border-white/10 text-gray-500 hover:bg-white/10'
+                        }`}
+                      >
+                        Arquivo Local
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVignetteForm({ ...vignetteForm, mode: 'url' })}
+                        className={`py-2 rounded-xl text-[8px] font-black uppercase tracking-widest border transition-all ${
+                          vignetteForm.mode === 'url' 
+                            ? 'bg-primary/20 border-primary text-primary' 
+                            : 'bg-white/5 border-white/10 text-gray-500 hover:bg-white/10'
+                        }`}
+                      >
+                        URL Externa
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nome do Arquivo</label>
                     <input 
@@ -1477,26 +1631,41 @@ export const LiveStudio: React.FC = () => {
                       placeholder="Ex: Vinheta Abertura"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo de Áudio (MP3/WAV)</label>
-                    <div className="relative group">
-                      <input 
-                        type="file" 
-                        accept="audio/*"
-                        onChange={(e) => setVignetteForm({ ...vignetteForm, file: e.target.files?.[0] || null })}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      />
-                      <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm flex items-center justify-between group-hover:border-primary/30 transition-colors">
-                        <span className="text-gray-500 truncate">
-                          {vignetteForm.file ? vignetteForm.file.name : 'Clique para selecionar arquivo'}
-                        </span>
-                        <Plus className="size-4 text-gray-500" />
+
+                  {vignetteForm.mode === 'file' ? (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Arquivo de Áudio (MP3/WAV)</label>
+                      <div className="relative group">
+                        <input 
+                          type="file" 
+                          accept="audio/*"
+                          onChange={(e) => setVignetteForm({ ...vignetteForm, file: e.target.files?.[0] || null })}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                        />
+                        <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm flex items-center justify-between group-hover:border-primary/30 transition-colors">
+                          <span className="text-gray-500 truncate">
+                            {vignetteForm.file ? vignetteForm.file.name : 'Clique para selecionar arquivo'}
+                          </span>
+                          <Plus className="size-4 text-gray-500" />
+                        </div>
                       </div>
+                      <p className="text-[8px] text-gray-600 font-bold uppercase mt-1">
+                        Certifique-se de que o bucket <span className="text-primary">{vignetteForm.bucket}</span> existe no seu Supabase Storage.
+                      </p>
                     </div>
-                    <p className="text-[8px] text-gray-600 font-bold uppercase mt-1">
-                      Certifique-se de que o bucket <span className="text-primary">{vignetteForm.bucket}</span> existe no seu Supabase Storage.
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">URL do Áudio</label>
+                      <input 
+                        type="url" 
+                        required
+                        value={vignetteForm.url}
+                        onChange={(e) => setVignetteForm({ ...vignetteForm, url: e.target.value })}
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-sm focus:outline-none focus:border-primary/50 transition-colors"
+                        placeholder="https://exemplo.com/audio.mp3"
+                      />
+                    </div>
+                  )}
                   <button 
                     type="submit"
                     disabled={isGeneratingVignette}

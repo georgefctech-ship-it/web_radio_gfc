@@ -83,16 +83,36 @@ export const useAudioStudio = () => {
   }, [queue, mixer]);
 
   const uploadAudio = useCallback(async (bucket: 'vinhetas' | 'trilhas' | 'comerciais', file: File | Blob, name: string) => {
-    const url = await audioService.uploadFile(bucket, file, name);
-    if (url) {
+    try {
+      const type = bucket === 'vinhetas' ? 'vignette' : bucket === 'trilhas' ? 'track' : 'commercial';
+      const url = await audioService.uploadFile(bucket, file, name, type);
+      if (url) {
+        await loadAll();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Upload failed in hook:', err);
+      throw err;
+    }
+  }, [loadAll]);
+
+  const saveExternalAudio = useCallback(async (type: 'vignette' | 'track' | 'commercial', name: string, url: string) => {
+    const success = await audioService.saveMetadata({
+      name,
+      url,
+      type,
+      fileName: '' // No file name for external URLs
+    });
+    if (success) {
       await loadAll();
       return true;
     }
     return false;
   }, [loadAll]);
 
-  const deleteAudio = useCallback(async (bucket: 'vinhetas' | 'trilhas' | 'comerciais', fileName: string) => {
-    const success = await audioService.deleteFile(bucket, fileName);
+  const deleteAudio = useCallback(async (bucket: 'vinhetas' | 'trilhas' | 'comerciais', fileName: string, id?: string) => {
+    const success = await audioService.deleteFile(bucket, fileName, id);
     if (success) {
       await loadAll();
       return true;
@@ -116,6 +136,7 @@ export const useAudioStudio = () => {
     clearQueue,
     playNextInQueue,
     uploadAudio,
+    saveExternalAudio,
     deleteAudio,
     refresh: loadAll,
     ...mixer
