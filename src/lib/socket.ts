@@ -3,15 +3,21 @@ import { io } from 'socket.io-client';
 // Use window.location.origin to ensure we connect to the same host
 // In AI Studio, this handles both the dev and shared URLs correctly.
 // For Vercel deployments, define VITE_SOCKET_URL to point to a backend that supports websockets (e.g. Render, Railway)
-const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+const isAIStudio = typeof window !== 'undefined' && (
+  window.location.hostname.includes('run.app') || 
+  window.location.hostname.includes('aistudio-dev.com') ||
+  window.location.hostname.includes('localhost')
+);
+
 const rawSocketUrl = import.meta.env.VITE_SOCKET_URL || '';
-const isPlaceholder = rawSocketUrl.includes('sua-url-do-render') || 
-                      rawSocketUrl.includes('your-url') || 
+const isPlaceholder = rawSocketUrl.toLowerCase().includes('sua-url-do-render') || 
+                      rawSocketUrl.toLowerCase().includes('your-url') || 
                       rawSocketUrl === '' || 
                       rawSocketUrl === 'undefined' ||
                       rawSocketUrl === 'null';
 
-const socketUrl = isPlaceholder ? (typeof window !== 'undefined' ? window.location.origin : '') : rawSocketUrl;
+// In AI Studio, we always want to connect to the current origin for full-stack apps
+const socketUrl = (isAIStudio || isPlaceholder) ? (typeof window !== 'undefined' ? window.location.origin : '') : rawSocketUrl;
 
 console.log("[Socket] Initializing...");
 console.log("[Socket] Raw URL from env:", rawSocketUrl);

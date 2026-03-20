@@ -51,8 +51,8 @@ export const LiveStudio: React.FC = () => {
     removeFromQueue,
     clearQueue,
     playNextInQueue,
-    uploadVignette,
-    deleteVignette,
+    uploadAudio,
+    deleteAudio,
     refresh: refreshStudio
   } = useAudioStudio();
 
@@ -72,7 +72,12 @@ export const LiveStudio: React.FC = () => {
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [vignetteToDelete, setVignetteToDelete] = useState<AudioFile | null>(null);
   const [editingVignette, setEditingVignette] = useState<AudioFile | null>(null);
-  const [vignetteForm, setVignetteForm] = useState({ name: '', url: '', file: null as File | null });
+  const [vignetteForm, setVignetteForm] = useState({ 
+    name: '', 
+    url: '', 
+    file: null as File | null,
+    bucket: 'vinhetas' as 'vinhetas' | 'trilhas' | 'comerciais'
+  });
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isGeneratingVignette, setIsGeneratingVignette] = useState(false);
@@ -466,22 +471,20 @@ export const LiveStudio: React.FC = () => {
     setIsGeneratingVignette(true);
     try {
       if (vignetteForm.file) {
-        const success = await uploadVignette(vignetteForm.file, vignetteForm.name);
+        const success = await uploadAudio(vignetteForm.bucket, vignetteForm.file, vignetteForm.name);
         if (success) {
-          setStatusMessage({ type: 'success', text: 'Vinheta enviada com sucesso!' });
+          setStatusMessage({ type: 'success', text: 'Arquivo enviado com sucesso!' });
         } else {
           throw new Error("Erro ao enviar arquivo.");
         }
       } else if (vignetteForm.url) {
-        // If it's just a URL, we can't easily "upload" it to the bucket unless we fetch it first
-        // For now, let's assume the user uploads files
         setStatusMessage({ type: 'error', text: 'Por favor, selecione um arquivo para enviar.' });
         return;
       }
       setIsVignetteFormOpen(false);
-      setVignetteForm({ name: '', url: '', file: null });
+      setVignetteForm({ name: '', url: '', file: null, bucket: 'vinhetas' });
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Erro ao salvar vinheta.' });
+      setStatusMessage({ type: 'error', text: err.message || 'Erro ao salvar arquivo.' });
     } finally {
       setIsGeneratingVignette(false);
       setTimeout(() => setStatusMessage(null), 3000);
@@ -495,11 +498,11 @@ export const LiveStudio: React.FC = () => {
 
   const confirmDeleteVignette = async () => {
     if (!vignetteToDelete) return;
-    const success = await deleteVignette(vignetteToDelete.fileName);
+    const success = await deleteAudio(vignetteToDelete.type === 'track' ? 'trilhas' : vignetteToDelete.type === 'commercial' ? 'comerciais' : 'vinhetas', vignetteToDelete.fileName);
     if (success) {
-      setStatusMessage({ type: 'success', text: 'Vinheta excluída!' });
+      setStatusMessage({ type: 'success', text: 'Arquivo excluído!' });
     } else {
-      setStatusMessage({ type: 'error', text: 'Erro ao excluir vinheta.' });
+      setStatusMessage({ type: 'error', text: 'Erro ao excluir arquivo.' });
     }
     setIsConfirmDeleteOpen(false);
     setVignetteToDelete(null);
@@ -562,7 +565,7 @@ export const LiveStudio: React.FC = () => {
         const blob = new Blob([wavData], { type: 'audio/wav' });
         const name = aiPrompt.length > 20 ? aiPrompt.substring(0, 20) : aiPrompt;
         
-        const success = await uploadVignette(blob, `${name}.wav`);
+        const success = await uploadAudio('vinhetas', blob, `${name}.wav`);
         if (success) {
           setStatusMessage({ type: 'success', text: 'Vinheta IA gerada e salva!' });
           setIsManageModalOpen(false);
@@ -657,10 +660,10 @@ export const LiveStudio: React.FC = () => {
           
           <button 
             onClick={stopAllVignettes}
-            className="px-6 py-3 bg-red-600/20 text-red-500 border border-red-500/30 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-red-600 hover:text-white hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-red-600/10"
+            className="px-8 py-4 bg-red-600/20 text-red-500 border-2 border-red-500/50 rounded-3xl font-black uppercase tracking-[0.2em] text-xs hover:bg-red-600 hover:text-white hover:scale-105 active:scale-95 transition-all flex items-center gap-3 shadow-2xl shadow-red-600/20 group"
             title="PARAR TUDO (Pânico)"
           >
-            <Zap className="size-4 fill-current" />
+            <Zap className="size-5 fill-current group-hover:animate-bounce" />
             PÂNICO
           </button>
 
@@ -975,10 +978,10 @@ export const LiveStudio: React.FC = () => {
                     <button 
                       onClick={() => {
                         setEditingVignette(null);
-                        setVignetteForm({ name: '', url: '', file: null });
+                        setVignetteForm({ name: '', url: '', file: null, bucket: 'vinhetas' });
                         setIsVignetteFormOpen(true);
                       }}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all hover:scale-105 active:scale-95"
                     >
                       <Plus className="size-3" />
                       Novo
@@ -1045,41 +1048,64 @@ export const LiveStudio: React.FC = () => {
                     <p className="text-[10px] text-gray-600 font-bold uppercase">Músicas instrumentais em loop</p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <Volume2 className="size-4 text-gray-500" />
-                    <input 
-                      type="range" min="0" max="1" step="0.01" value={trackVolume}
-                      onChange={(e) => setTrackVolume(parseFloat(e.target.value))}
-                      className="w-32 h-1 bg-white/10 rounded-full appearance-none accent-primary"
-                    />
+                    <button 
+                      onClick={() => {
+                        setEditingVignette(null);
+                        setVignetteForm({ name: '', url: '', file: null, bucket: 'trilhas' });
+                        setIsVignetteFormOpen(true);
+                      }}
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all hover:scale-105 active:scale-95"
+                    >
+                      <Plus className="size-3" />
+                      Novo
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <Volume2 className="size-4 text-gray-500" />
+                      <input 
+                        type="range" min="0" max="1" step="0.01" value={trackVolume}
+                        onChange={(e) => setTrackVolume(parseFloat(e.target.value))}
+                        className="w-32 h-1 bg-white/10 rounded-full appearance-none accent-primary"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {tracks.map((track) => (
-                    <button
-                      key={track.id}
-                      onClick={() => toggleTrack(track)}
-                      className={`flex items-center gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-98 ${
-                        activeTrack === track.id 
-                          ? 'bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10' 
-                          : 'bg-black/40 border-white/5 text-gray-400 hover:border-white/20 hover:bg-black/60'
-                      }`}
-                    >
-                      <div className={`size-10 rounded-xl flex items-center justify-center transition-colors ${activeTrack === track.id ? 'bg-primary/20' : 'bg-white/5 group-hover:bg-white/10'}`}>
-                        {activeTrack === track.id ? <Loader2 className="size-5 animate-spin" /> : <Music2 className="size-5" />}
-                      </div>
-                      <div className="flex-1 text-left overflow-hidden">
-                        <p className="text-[10px] font-black uppercase tracking-widest truncate">{track.name}</p>
-                        <p className="text-[8px] font-bold uppercase opacity-50">{activeTrack === track.id ? 'Reproduzindo (Loop)' : 'Pronto'}</p>
-                      </div>
-                      {activeTrack === track.id && (
-                        <div className="flex gap-0.5">
-                          {[...Array(3)].map((_, i) => (
-                            <div key={i} className="w-0.5 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
-                          ))}
+                    <div key={track.id} className="group relative">
+                      <button
+                        onClick={() => toggleTrack(track)}
+                        className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all hover:scale-[1.02] active:scale-98 ${
+                          activeTrack === track.id 
+                            ? 'bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10' 
+                            : 'bg-black/40 border-white/5 text-gray-400 hover:border-white/20 hover:bg-black/60'
+                        }`}
+                      >
+                        <div className={`size-10 rounded-xl flex items-center justify-center transition-colors ${activeTrack === track.id ? 'bg-primary/20' : 'bg-white/5 group-hover:bg-white/10'}`}>
+                          {activeTrack === track.id ? <Loader2 className="size-5 animate-spin" /> : <Music2 className="size-5" />}
                         </div>
-                      )}
-                    </button>
+                        <div className="flex-1 text-left overflow-hidden">
+                          <p className="text-[10px] font-black uppercase tracking-widest truncate">{track.name}</p>
+                          <p className="text-[8px] font-bold uppercase opacity-50">{activeTrack === track.id ? 'Reproduzindo (Loop)' : 'Pronto'}</p>
+                        </div>
+                        {activeTrack === track.id && (
+                          <div className="flex gap-0.5">
+                            {[...Array(3)].map((_, i) => (
+                              <div key={i} className="w-0.5 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                            ))}
+                          </div>
+                        )}
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteVignette(track);
+                        }}
+                        className="absolute -top-2 -right-2 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg z-10"
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    </div>
                   ))}
                   {tracks.length === 0 && !studioLoading && (
                     <div className="col-span-full py-8 text-center border-2 border-dashed border-white/5 rounded-[32px]">
@@ -1091,10 +1117,23 @@ export const LiveStudio: React.FC = () => {
 
               {/* Comercial Queue Section */}
             <section className="bg-white/5 rounded-[40px] border border-white/10 p-6 sm:p-8 flex flex-col h-full">
-              <div className="flex flex-col gap-1 mb-8">
-                <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Fila de Comerciais</h2>
-                <p className="text-[10px] text-gray-600 font-bold uppercase">Programação de spots</p>
-              </div>
+                <div className="flex flex-col gap-1 mb-8">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">Fila de Comerciais</h2>
+                    <button 
+                      onClick={() => {
+                        setEditingVignette(null);
+                        setVignetteForm({ name: '', url: '', file: null, bucket: 'comerciais' });
+                        setIsVignetteFormOpen(true);
+                      }}
+                      className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-primary/20 transition-all hover:scale-105 active:scale-95"
+                    >
+                      <Plus className="size-3" />
+                      Novo
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-600 font-bold uppercase">Programação de spots</p>
+                </div>
 
               <div className="flex-1 flex flex-col gap-6 overflow-hidden">
                 {/* Available Commercials */}
@@ -1104,12 +1143,20 @@ export const LiveStudio: React.FC = () => {
                     {commercials.map((c) => (
                       <div key={c.id} className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5 group">
                         <span className="text-[10px] font-bold text-gray-300 truncate flex-1">{c.name}</span>
-                        <button 
-                          onClick={() => addToQueue(c)}
-                          className="p-2 bg-white/5 rounded-lg text-primary hover:bg-primary/20 transition-all opacity-0 group-hover:opacity-100"
-                        >
-                          <Plus className="size-3" />
-                        </button>
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                          <button 
+                            onClick={() => handleDeleteVignette(c)}
+                            className="p-2 bg-red-500/10 rounded-lg text-red-500 hover:bg-red-500/20 transition-all"
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
+                          <button 
+                            onClick={() => addToQueue(c)}
+                            className="p-2 bg-white/5 rounded-lg text-primary hover:bg-primary/20 transition-all"
+                          >
+                            <Plus className="size-3" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1401,7 +1448,26 @@ export const LiveStudio: React.FC = () => {
 
                 <form onSubmit={handleSaveVignette} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nome da Vinheta</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Tipo de Áudio</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['vinhetas', 'trilhas', 'comerciais'] as const).map((b) => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setVignetteForm({ ...vignetteForm, bucket: b })}
+                          className={`py-2 rounded-xl text-[8px] font-black uppercase tracking-widest border transition-all ${
+                            vignetteForm.bucket === b 
+                              ? 'bg-primary/20 border-primary text-primary' 
+                              : 'bg-white/5 border-white/10 text-gray-500 hover:bg-white/10'
+                          }`}
+                        >
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Nome do Arquivo</label>
                     <input 
                       type="text" 
                       required
@@ -1427,6 +1493,9 @@ export const LiveStudio: React.FC = () => {
                         <Plus className="size-4 text-gray-500" />
                       </div>
                     </div>
+                    <p className="text-[8px] text-gray-600 font-bold uppercase mt-1">
+                      Certifique-se de que o bucket <span className="text-primary">{vignetteForm.bucket}</span> existe no seu Supabase Storage.
+                    </p>
                   </div>
                   <button 
                     type="submit"

@@ -82,8 +82,8 @@ export const useAudioStudio = () => {
     setQueue(prev => prev.slice(1));
   }, [queue, mixer]);
 
-  const uploadVignette = useCallback(async (file: File | Blob, name: string) => {
-    const url = await audioService.uploadFile('vinhetas', file, name);
+  const uploadAudio = useCallback(async (bucket: 'vinhetas' | 'trilhas' | 'comerciais', file: File | Blob, name: string) => {
+    const url = await audioService.uploadFile(bucket, file, name);
     if (url) {
       await loadAll();
       return true;
@@ -91,8 +91,8 @@ export const useAudioStudio = () => {
     return false;
   }, [loadAll]);
 
-  const deleteVignette = useCallback(async (fileName: string) => {
-    const success = await audioService.deleteFile('vinhetas', fileName);
+  const deleteAudio = useCallback(async (bucket: 'vinhetas' | 'trilhas' | 'comerciais', fileName: string) => {
+    const success = await audioService.deleteFile(bucket, fileName);
     if (success) {
       await loadAll();
       return true;
@@ -115,8 +115,8 @@ export const useAudioStudio = () => {
     removeFromQueue,
     clearQueue,
     playNextInQueue,
-    uploadVignette,
-    deleteVignette,
+    uploadAudio,
+    deleteAudio,
     refresh: loadAll,
     ...mixer
   };
