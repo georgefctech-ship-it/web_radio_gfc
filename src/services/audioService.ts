@@ -72,11 +72,20 @@ export const audioService = {
         .select()
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error saving audio metadata:', error);
+        if (error.message.includes('row-level security policy')) {
+          throw new Error("Erro de Permissão: A tabela 'audio_files' precisa de políticas de RLS para permitir inserções.");
+        }
+        if (error.code === '42P01') {
+          throw new Error("Erro de Banco de Dados: A tabela 'audio_files' não existe. Por favor, execute as migrações SQL.");
+        }
+        throw error;
+      }
       return data;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving audio metadata:', err);
-      return null;
+      throw err;
     }
   },
 
@@ -89,6 +98,9 @@ export const audioService = {
       
       if (error) {
         console.error('Supabase Storage Upload Error:', error);
+        if (error.message.includes('row-level security policy')) {
+          throw new Error("Erro de Permissão: Você precisa configurar as políticas de RLS no Supabase Storage para os buckets 'vinhetas', 'trilhas' e 'comerciais'.");
+        }
         throw new Error(`Erro no Storage: ${error.message}`);
       }
       
