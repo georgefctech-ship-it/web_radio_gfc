@@ -1118,27 +1118,29 @@ export const LiveStudio: React.FC = () => {
                   {vignettes.map((v) => (
                     <div key={v.id} className="group relative hover:scale-[1.05] transition-all duration-300">
                       <div className="flex flex-col gap-1">
-                        <button
-                          onClick={() => playVignette(v.url, 'deck1')}
-                          className="w-full h-16 bg-black/40 border border-white/5 rounded-t-2xl p-3 flex flex-col justify-between hover:bg-primary/20 hover:border-primary/30 transition-all text-left overflow-hidden active:scale-95"
-                        >
-                          <div className="flex items-center justify-between w-full">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary truncate pr-4">{v.name}</span>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteVignette(v);
-                              }}
-                              className="p-1.5 hover:bg-red-500/20 rounded-lg transition-colors group/del"
-                            >
-                              <Trash2 className="size-3 text-red-500/50 group-hover/del:text-red-500" />
-                            </button>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
-                            <span className="text-[7px] font-black text-gray-600 uppercase">Deck 1</span>
-                          </div>
-                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={() => playVignette(v.url, 'deck1')}
+                            className="w-full h-16 bg-black/40 border border-white/5 rounded-t-2xl p-3 flex flex-col justify-between hover:bg-primary/20 hover:border-primary/30 transition-all text-left overflow-hidden active:scale-95"
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 group-hover:text-primary truncate pr-4">{v.name}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Play className="size-3 text-primary fill-current opacity-50 group-hover:opacity-100" />
+                              <span className="text-[7px] font-black text-gray-600 uppercase">Deck 1</span>
+                            </div>
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteVignette(v);
+                            }}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100 z-10"
+                          >
+                            <Trash2 className="size-3 text-red-500/50 hover:text-red-500" />
+                          </button>
+                        </div>
                         <button
                           onClick={() => playVignette(v.url, 'deck2')}
                           className="w-full h-16 bg-black/40 border border-white/5 rounded-b-2xl p-3 flex flex-col justify-between hover:bg-primary/20 hover:border-primary/30 transition-all text-left overflow-hidden active:scale-95"
