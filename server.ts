@@ -188,56 +188,75 @@ async function startServer() {
         // Sanitize server: remove http://, https:// and trailing ports
         server = server.replace(/^https?:\/\//, '').split(':')[0];
         
-        console.log(`[Icecast] Attempting connection to ${server}:${port}${mount}...`);
-        
-        icecastStream = new PassThrough();
-        
-        const options = {
-          hostname: server,
-          port: port,
-          path: mount,
-          method: 'SOURCE',
-          family: 4, // Force IPv4
-          timeout: 10000, // 10 second timeout
-          headers: {
-            'Authorization': 'Basic ' + Buffer.from('source:' + password).toString('base64'),
-            'Content-Type': 'audio/ogg',
-            'ice-name': process.env.ICECAST_NAME || 'Web Radio',
-            'ice-url': process.env.ICECAST_URL || 'https://caster.fm',
-            'ice-genre': process.env.ICECAST_GENRE || 'Radio',
-            'ice-description': process.env.ICECAST_DESCRIPTION || 'Live Broadcast',
-            'ice-public': '1',
-            'ice-bitrate': '96',
-            'Expect': '100-continue',
-            'User-Agent': 'Icecast 2.4.4' // Standard user agent for Icecast
-          }
+        const tryConnect = (targetPort: number, isFallback = false) => {
+          console.log(`[Icecast] ${isFallback ? 'Fallback' : 'Initial'} attempt to ${server}:${targetPort}${mount}...`);
+          
+          const options = {
+            hostname: server,
+            port: targetPort,
+            path: mount,
+            method: 'SOURCE',
+            family: 4,
+            timeout: 10000,
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from('source:' + password).toString('base64'),
+              'Content-Type': 'audio/ogg',
+              'ice-name': process.env.ICECAST_NAME || 'Web Radio',
+              'ice-url': process.env.ICECAST_URL || 'https://caster.fm',
+              'ice-genre': process.env.ICECAST_GENRE || 'Radio',
+              'ice-description': process.env.ICECAST_DESCRIPTION || 'Live Broadcast',
+              'ice-public': '1',
+              'ice-bitrate': '96',
+              'Expect': '100-continue',
+              'User-Agent': 'Icecast 2.4.4'
+            }
+          };
+
+          const currentRequest = httpRequest(options, (res) => {
+            console.log(`[Icecast] Connected to port ${targetPort}! Status: ${res.statusCode}`);
+            if (res.statusCode !== 200 && res.statusCode !== 100) {
+              socket.emit("live:error", { 
+                message: `Servidor Icecast (Porta ${targetPort}) retornou erro ${res.statusCode}. Verifique a senha de SOURCE.` 
+              });
+            }
+            res.on('data', (chunk) => console.log(`[Icecast] Response: ${chunk}`));
+          });
+
+          currentRequest.on('error', (err: any) => {
+            console.error(`[Icecast] Connection Failed on port ${targetPort}:`, err.message);
+            
+            if (err.code === 'ECONNREFUSED' && !isFallback) {
+              // If initial port failed, try common fallbacks
+              if (targetPort !== 8000) {
+                console.log("[Icecast] Initial port failed. Trying fallback port 8000...");
+                socket.emit("live:error", { message: `Porta ${targetPort} recusada. Tentando porta padrão 8000...` });
+                tryConnect(8000, true);
+                return;
+              } else if (targetPort === 8000) {
+                console.log("[Icecast] Port 8000 failed. Trying fallback port 8001...");
+                socket.emit("live:error", { message: `Porta 8000 recusada. Tentando porta 8001...` });
+                tryConnect(8001, true);
+                return;
+              }
+            }
+
+            let userMessage = `Erro de conexão com Icecast (${server}:${targetPort}): ${err.message}`;
+            if (err.code === 'ECONNREFUSED') {
+              userMessage = `Conexão recusada por ${server}:${targetPort}. DICA: Verifique se você está usando a porta de TRANSMISSÃO (geralmente 8000) e não a porta de OUVINTES (${targetPort}). Certifique-se que o servidor está 'ON' no painel da Caster.fm.`;
+            } else if (err.code === 'ETIMEDOUT') {
+              userMessage = `Tempo de conexão esgotado (Timeout) com ${server}:${targetPort}. DICA: O servidor não respondeu. Verifique se o status do servidor está 'ON' no painel da Caster.fm e se a porta ${targetPort} é a correta para SOURCE.`;
+            }
+            
+            socket.emit("live:error", { message: userMessage });
+            stopIcecast();
+          });
+
+          icecastRequest = currentRequest;
+          icecastStream?.pipe(currentRequest);
         };
 
-        icecastRequest = httpRequest(options, (res) => {
-          console.log(`[Icecast] Connected! Status: ${res.statusCode}`);
-          if (res.statusCode !== 200 && res.statusCode !== 100) {
-            socket.emit("live:error", { 
-              message: `Servidor Icecast retornou erro ${res.statusCode}. Verifique a senha de SOURCE.` 
-            });
-          }
-          res.on('data', (chunk) => console.log(`[Icecast] Response: ${chunk}`));
-        });
-
-        icecastRequest.on('error', (err: any) => {
-          console.error(`[Icecast] Connection Failed:`, err.message);
-          let userMessage = `Erro de conexão com Icecast (${server}:${port}): ${err.message}`;
-          
-          if (err.code === 'ECONNREFUSED') {
-            userMessage = `Conexão recusada por ${server}:${port}. DICA: Verifique se você está usando a porta de TRANSMISSÃO (geralmente 8000) e não a porta de OUVINTES (${port}). Certifique-se que o servidor está 'ON' no painel da Caster.fm.`;
-          } else if (err.code === 'ETIMEDOUT') {
-            userMessage = `Tempo de conexão esgotado (Timeout) com ${server}:${port}. DICA: O servidor não respondeu. Verifique se o status do servidor está 'ON' no painel da Caster.fm e se a porta ${port} é a correta para SOURCE.`;
-          }
-          
-          socket.emit("live:error", { message: userMessage });
-          stopIcecast();
-        });
-
-        icecastStream.pipe(icecastRequest);
+        icecastStream = new PassThrough();
+        tryConnect(port);
         console.log("[Icecast] Stream relay initialized.");
       }
 
