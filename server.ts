@@ -26,9 +26,9 @@ async function startServer() {
         credentials: true
       },
       transports: ['polling', 'websocket'], // Align with client: polling first
-      pingTimeout: 60000,
+      pingTimeout: 120000, // Increased to 120s
       pingInterval: 25000,
-      connectTimeout: 45000,
+      connectTimeout: 60000, // Increased to 60s
       allowEIO3: true,
       maxHttpBufferSize: 1e8
     });
@@ -162,6 +162,8 @@ async function startServer() {
         let msg = `Falha no teste de conexão: ${err.message}`;
         if (err.code === 'ECONNREFUSED') {
           msg = `Porta ${port} recusada em ${sanitizedServer}. DICA: Use a porta de SOURCE (ex: 8000), não a de ouvintes (ex: 19793).`;
+        } else if (err.code === 'ETIMEDOUT') {
+          msg = `Tempo de conexão esgotado (Timeout) em ${sanitizedServer}:${port}. DICA: Verifique se o servidor está 'ON' no painel da Caster.fm e se a porta ${port} está correta.`;
         }
         socket.emit("live:error", { message: msg });
       });
@@ -196,6 +198,7 @@ async function startServer() {
           path: mount,
           method: 'SOURCE',
           family: 4, // Force IPv4
+          timeout: 10000, // 10 second timeout
           headers: {
             'Authorization': 'Basic ' + Buffer.from('source:' + password).toString('base64'),
             'Content-Type': 'audio/ogg',
@@ -206,7 +209,7 @@ async function startServer() {
             'ice-public': '1',
             'ice-bitrate': '96',
             'Expect': '100-continue',
-            'User-Agent': 'RadioGeorgeFctech/1.0'
+            'User-Agent': 'Icecast 2.4.4' // Standard user agent for Icecast
           }
         };
 
@@ -226,6 +229,8 @@ async function startServer() {
           
           if (err.code === 'ECONNREFUSED') {
             userMessage = `Conexão recusada por ${server}:${port}. DICA: Verifique se você está usando a porta de TRANSMISSÃO (geralmente 8000) e não a porta de OUVINTES (${port}). Certifique-se que o servidor está 'ON' no painel da Caster.fm.`;
+          } else if (err.code === 'ETIMEDOUT') {
+            userMessage = `Tempo de conexão esgotado (Timeout) com ${server}:${port}. DICA: O servidor não respondeu. Verifique se o status do servidor está 'ON' no painel da Caster.fm e se a porta ${port} é a correta para SOURCE.`;
           }
           
           socket.emit("live:error", { message: userMessage });
